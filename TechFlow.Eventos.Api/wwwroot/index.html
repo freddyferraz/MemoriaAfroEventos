@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agenda de Eventos — Coonecta Cultura</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Figtree:wght@400;500;700&display=swap" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body data-pagina="index.html">
+  <header id="site-header" class="site-header"></header>
+
+  <section class="hero">
+    <div class="container">
+      <h1>Agenda cultural<br />de Sacra Família do Tinguá</h1>
+      <p class="lead">
+        Encontre o que acontece em Sacra Família do Tinguá e região. Os eventos são enviados por
+        organizadores e moradores e conferidos por um moderador antes de entrar na agenda.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-accent" href="explorar.html">Explorar eventos</a>
+        <a class="btn btn-on-dark" href="divulgar.html">Divulgar evento</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="section-header"><h2>Em destaque</h2></div>
+      <div class="ev-grid" id="destaques"><div class="empty-state">Carregando...</div></div>
+
+      <div class="section-header" style="margin-top:44px"><h2>Próximos eventos</h2></div>
+      <div class="ev-grid" id="proximos"></div>
+
+      <div class="section-header" style="margin-top:44px"><h2>Programação</h2></div>
+      <div class="tabs" role="group" aria-label="Período da programação">
+        <button type="button" data-dias="6" aria-pressed="true">Semanal</button>
+        <button type="button" data-dias="29" aria-pressed="false">Mensal</button>
+      </div>
+      <div id="programacao"></div>
+    </div>
+  </section>
+
+  <footer id="site-footer" class="site-footer"></footer>
+  <script src="js/shared.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/index.js"></script>
+</body>
+</html>

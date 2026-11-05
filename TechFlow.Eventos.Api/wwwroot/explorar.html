@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Explorar eventos — Coonecta Cultura</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Figtree:wght@400;500;700&display=swap" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body data-pagina="explorar.html">
+  <header id="site-header" class="site-header"></header>
+
+  <div class="container page-heading" style="text-align:center;max-width:680px;margin:0 auto">
+    <h1>Explorar eventos</h1>
+    <p class="page-subtitle">Filtre por cidade, distância, data, categoria e preço.</p>
+  </div>
+
+  <div class="container" style="padding-bottom:72px">
+    <form class="filtros" id="filtros" role="search">
+      <div class="form-field"><label for="f-q">Buscar</label><input type="search" id="f-q" placeholder="Nome, atração ou organizador" /></div>
+      <div class="form-field"><label for="f-cidade">Cidade</label><select id="f-cidade"><option value="">Todas</option></select></div>
+      <div class="form-field"><label for="f-categoria">Categoria</label><select id="f-categoria"><option value="">Todas</option></select></div>
+      <div class="form-field"><label for="f-de">A partir de</label><input type="date" id="f-de" /></div>
+      <div class="form-field"><label for="f-ate">Até</label><input type="date" id="f-ate" /></div>
+      <div class="form-field"><label for="f-preco">Preço máximo (R$)</label><input type="number" id="f-preco" min="0" step="5" placeholder="Qualquer" /></div>
+      <div class="form-field">
+        <label for="f-dist">Distância até <output id="f-dist-val">30</output> km</label>
+        <input type="range" id="f-dist" min="5" max="100" step="5" value="30" />
+        <button type="button" class="btn btn-outline btn-small" id="btn-local" style="margin-top:8px">Usar minha localização</button>
+        <div class="form-hint" id="local-status">Sem localização, a distância não é aplicada.</div>
+      </div>
+      <label class="check"><input type="checkbox" id="f-gratis" /> Somente gratuitos</label>
+      <div style="align-self:end"><button type="button" class="btn btn-outline btn-small" id="btn-limpar">Limpar filtros</button></div>
+    </form>
+
+    <p id="contagem" class="ev-meta" aria-live="polite"></p>
+    <div class="ev-grid" id="resultados"></div>
+  </div>
+
+  <footer id="site-footer" class="site-footer"></footer>
+  <script src="js/shared.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/explorar.js"></script>
+</body>
+</html>

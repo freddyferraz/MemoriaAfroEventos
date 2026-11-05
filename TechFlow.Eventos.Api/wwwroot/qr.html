@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QR codes — Coonecta Cultura</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Figtree:wght@400;500;700&display=swap" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body data-pagina="qr.html">
+  <header id="site-header" class="site-header"></header>
+  <div class="page-heading">
+    <h1>QR codes</h1>
+    <p class="page-subtitle">Os endereços usam o domínio em que esta página está aberta. Gere os QR codes já no endereço de produção.</p>
+  </div>
+  <div class="container" style="padding-bottom:72px">
+    <div class="qr-grid">
+      <section class="qr-card"><h2>QR 1: página principal</h2><div id="qr1" role="img" aria-label="QR code da página principal"></div><p class="qr-url" id="url1"></p>
+        <button class="btn btn-outline btn-small no-print" data-baixar="qr1" data-nome="qr-pagina-principal" type="button">Baixar PNG</button></section>
+      <section class="qr-card"><h2>QR 2: divulgar evento</h2><div id="qr2" role="img" aria-label="QR code do cadastro de evento"></div><p class="qr-url" id="url2"></p>
+        <button class="btn btn-outline btn-small no-print" data-baixar="qr2" data-nome="qr-divulgar-evento" type="button">Baixar PNG</button></section>
+    </div>
+    <p class="no-print" style="text-align:center;margin-top:24px"><button class="btn btn-primary" onclick="window.print()" type="button">Imprimir</button></p>
+  </div>
+  <footer id="site-footer" class="site-footer"></footer>
+  <script src="js/shared.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const base = location.origin;
+      const alvos = [["qr1", "url1", `${base}/index.html`], ["qr2", "url2", `${base}/divulgar.html`]];
+      alvos.forEach(([id, urlId, url]) => {
+        document.getElementById(urlId).textContent = url;
+        new QRCode(document.getElementById(id), { text: url, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+      });
+      document.querySelectorAll("[data-baixar]").forEach((b) => b.addEventListener("click", () => {
+        const canvas = document.querySelector(`#${b.dataset.baixar} canvas`);
+        if (!canvas) return;
+        const a = document.createElement("a");
+        a.href = canvas.toDataURL("image/png");
+        a.download = `${b.dataset.nome}.png`;
+        a.click();
+      }));
+    });
+  </script>
+</body>
+</html>
