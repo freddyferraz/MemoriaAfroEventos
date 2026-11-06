@@ -230,6 +230,9 @@ namespace TechFlow.Eventos.Infra.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("TemFoto")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("TipoAutor")
                         .HasColumnType("integer");
 
@@ -246,6 +249,25 @@ namespace TechFlow.Eventos.Infra.Migrations
                     b.HasIndex("Status", "Data");
 
                     b.ToTable("Eventos");
+                });
+
+            modelBuilder.Entity("TechFlow.Eventos.Core.Models.EventoFoto", b =>
+                {
+                    b.Property<int>("EventoId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<byte[]>("Dados")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.HasKey("EventoId");
+
+                    b.ToTable("Fotos");
                 });
 
             modelBuilder.Entity("TechFlow.Eventos.Infra.Data.ApplicationUser", b =>
@@ -366,6 +388,22 @@ namespace TechFlow.Eventos.Infra.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("TechFlow.Eventos.Core.Models.EventoFoto", b =>
+                {
+                    b.HasOne("TechFlow.Eventos.Core.Models.Evento", "Evento")
+                        .WithOne("Foto")
+                        .HasForeignKey("TechFlow.Eventos.Core.Models.EventoFoto", "EventoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Evento");
+                });
+
+            modelBuilder.Entity("TechFlow.Eventos.Core.Models.Evento", b =>
+                {
+                    b.Navigation("Foto");
                 });
 #pragma warning restore 612, 618
         }

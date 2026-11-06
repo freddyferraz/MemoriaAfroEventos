@@ -1,0 +1,484 @@
+diff -ruN -x bin -x obj /tmp/antes/TechFlowEventos/README.md TechFlowEventos/README.md
+--- /tmp/antes/TechFlowEventos/README.md	2026-11-05 00:10:09.000000000 +0000
++++ TechFlowEventos/README.md	2026-11-06 00:03:31.969217200 +0000
+@@ -12,6 +12,13 @@
+ 
+ **QR codes** (`/qr.html`, para moderadores): QR 1 aponta para a página principal e QR 2 para o cadastro de evento.
+ 
++### Fase 2: foto do evento
++
++- **Divulgar evento:** campo opcional de foto (JPEG, PNG ou WebP). O navegador reduz a imagem (lado maior de 1280 px, JPEG) antes de enviar; o servidor aceita até 2 MB e confere o formato pelo conteúdo do arquivo, não pelo nome.
++- **Armazenamento:** a foto fica no banco, na tabela `Fotos` (bytea), separada de `Eventos` para que as listagens não carreguem imagens. `Eventos.TemFoto` indica se existe foto.
++- **Exibição:** `GET /api/eventos/{id}/foto`. Pública para eventos aprovados (cache de 1 dia); para pendentes só moderadores, e a tela de moderação mostra a foto antes da aprovação. A foto aparece no card (Início e Explorar) e nos detalhes.
++- **Migration:** `dotnet ef migrations add AdicionaFotoEvento --project TechFlow.Eventos.Infra --startup-project TechFlow.Eventos.Api`
++
+ ## Arquitetura (Clean Architecture, .NET 8)
+ 
+ ```
+@@ -22,7 +29,7 @@
+ ```
+ 
+ Principais endpoints: `GET /api/eventos` (filtros: `q, cidade, categoria, de, ate, precoMax, gratuito, destaque, lat, lng, distanciaKm`),
+-`GET /api/eventos/{id}`, `POST /api/eventos`, `GET /api/eventos/pendentes`, `PATCH /api/eventos/{id}/moderar`,
++`GET /api/eventos/{id}`, `POST /api/eventos` (multipart/form-data), `GET /api/eventos/{id}/foto`, `GET /api/eventos/pendentes`, `PATCH /api/eventos/{id}/moderar`,
+ `POST /api/auth/login`, `POST /api/auth/moderadores` (Admin).
+ 
+ ## Rodando localmente
+diff -ruN -x bin -x obj /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/Controllers/EventosController.cs TechFlowEventos/TechFlow.Eventos.Api/Controllers/EventosController.cs
+--- /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/Controllers/EventosController.cs	2026-11-05 00:08:42.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/Controllers/EventosController.cs	2026-11-06 00:02:40.780017132 +0000
+@@ -4,6 +4,7 @@
+ using TechFlow.Eventos.Api.DTOs;
+ using TechFlow.Eventos.Core.Enums;
+ using TechFlow.Eventos.Core.Geo;
++using TechFlow.Eventos.Core.Imagens;
+ using TechFlow.Eventos.Core.Interfaces;
+ using TechFlow.Eventos.Core.Models;
+ using TechFlow.Eventos.Infra.Data;
+@@ -54,6 +55,31 @@
+         return evento is null || evento.Status != StatusEvento.Aprovado ? NotFound() : Ok(ParaDto(evento));
+     }
+ 
++    /// <summary>
++    /// Foto do evento. Pública para eventos aprovados; para pendentes/rejeitados só moderadores
++    /// (a tela de moderação busca a imagem com o token).
++    /// </summary>
++    [HttpGet("{id:int}/foto")]
++    [AllowAnonymous]
++    public async Task<IActionResult> ObterFoto(int id)
++    {
++        var evento = await _repository.ObterPorIdAsync(id);
++        if (evento is null || !evento.TemFoto) return NotFound();
++
++        var publico = evento.Status == StatusEvento.Aprovado;
++        if (!publico && !User.IsInRole(DbSeeder.RoleAdmin) && !User.IsInRole(DbSeeder.RoleModerador))
++        {
++            return NotFound();
++        }
++
++        var foto = await _repository.ObterFotoAsync(id);
++        if (foto is null) return NotFound();
++
++        Response.Headers.CacheControl = publico ? "public, max-age=86400" : "private, no-store";
++        Response.Headers["X-Content-Type-Options"] = "nosniff";
++        return File(foto.Dados, foto.ContentType);
++    }
++
+     /// <summary>Categorias disponíveis (alimenta os filtros e o formulário).</summary>
+     [HttpGet("categorias")]
+     [AllowAnonymous]
+@@ -82,7 +108,9 @@
+     /// <summary>"Divulgar evento": aberto ao público. O evento nasce Pendente e só aparece após aprovação.</summary>
+     [HttpPost]
+     [AllowAnonymous]
+-    public async Task<ActionResult> Enviar(EventoCreateDto dto, CancellationToken ct)
++    [Consumes("multipart/form-data")]
++    [RequestSizeLimit(4 * 1024 * 1024)]
++    public async Task<ActionResult> Enviar([FromForm] EventoCreateDto dto, CancellationToken ct)
+     {
+         if (dto.Data < Evento.HojeBrasil())
+         {
+@@ -102,13 +130,34 @@
+             lng = coordenadas.Value.Longitude;
+         }
+ 
++        EventoFoto? foto = null;
++        if (dto.Foto is { Length: > 0 })
++        {
++            if (dto.Foto.Length > TipoImagem.TamanhoMaximoBytes)
++            {
++                return BadRequest(new { erro = "A foto deve ter no máximo 2 MB." });
++            }
++
++            using var ms = new MemoryStream();
++            await dto.Foto.CopyToAsync(ms, ct);
++            var bytes = ms.ToArray();
++            var tipo = TipoImagem.Detectar(bytes);
++            if (tipo is null)
++            {
++                return BadRequest(new { erro = "Formato de foto não aceito. Use JPEG, PNG ou WebP." });
++            }
++
++            foto = new EventoFoto { Dados = bytes, ContentType = tipo };
++        }
++
+         var evento = new Evento
+         {
+             Titulo = dto.Titulo.Trim(), Categoria = dto.Categoria, Cidade = dto.Cidade.Trim(),
+             Endereco = dto.Endereco.Trim(), Latitude = lat, Longitude = lng,
+-            Data = dto.Data, Horario = dto.Horario, Atracoes = dto.Atracoes, Preco = dto.Preco,
+-            Acessibilidade = dto.Acessibilidade, Ingressos = dto.Ingressos,
+-            Organizador = dto.Organizador.Trim(), FonteOficial = dto.FonteOficial,
++            Data = dto.Data, Horario = dto.Horario, Atracoes = dto.Atracoes?.Trim() ?? string.Empty, Preco = dto.Preco,
++            Acessibilidade = dto.Acessibilidade?.Trim() ?? string.Empty, Ingressos = dto.Ingressos?.Trim() ?? string.Empty,
++            Organizador = dto.Organizador.Trim(), FonteOficial = dto.FonteOficial?.Trim() ?? string.Empty,
++            TemFoto = foto is not null, Foto = foto,
+             ContatoEnvio = dto.ContatoEnvio.Trim(), TipoAutor = dto.TipoAutor,
+             Status = StatusEvento.Pendente,
+             UsuarioId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+@@ -150,7 +199,7 @@
+         Cidade = e.Cidade, Endereco = e.Endereco, Latitude = e.Latitude, Longitude = e.Longitude,
+         Data = e.Data, Horario = e.Horario, Atracoes = e.Atracoes, Preco = e.Preco, Gratuito = e.Gratuito,
+         Acessibilidade = e.Acessibilidade, Ingressos = e.Ingressos, Organizador = e.Organizador,
+-        FonteOficial = e.FonteOficial, Destaque = e.Destaque, Status = e.Status, TipoAutor = e.TipoAutor,
++        FonteOficial = e.FonteOficial, Destaque = e.Destaque, TemFoto = e.TemFoto, Status = e.Status, TipoAutor = e.TipoAutor,
+         DistanciaKm = origem is { } o && e.Latitude is { } la && e.Longitude is { } lo
+             ? Math.Round(o.DistanciaKm(new Coordenadas(la, lo)), 1)
+             : null
+diff -ruN -x bin -x obj /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/DTOs/EventoDtos.cs TechFlowEventos/TechFlow.Eventos.Api/DTOs/EventoDtos.cs
+--- /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/DTOs/EventoDtos.cs	2026-11-05 00:08:42.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/DTOs/EventoDtos.cs	2026-11-06 00:02:40.779783324 +0000
+@@ -19,14 +19,18 @@
+     [Required] public DateOnly Data { get; set; }
+     [Required] public TimeOnly Horario { get; set; }
+ 
+-    [MaxLength(2000)] public string Atracoes { get; set; } = string.Empty;
++    // Opcionais: nullable porque, em multipart/form-data, texto vazio chega como null.
++    [MaxLength(2000)] public string? Atracoes { get; set; }
+     [Range(0, 100000)] public decimal Preco { get; set; }
+-    [MaxLength(500)] public string Acessibilidade { get; set; } = string.Empty;
+-    [MaxLength(500)] public string Ingressos { get; set; } = string.Empty;
++    [MaxLength(500)] public string? Acessibilidade { get; set; }
++    [MaxLength(500)] public string? Ingressos { get; set; }
+     [Required, MaxLength(200)] public string Organizador { get; set; } = string.Empty;
+-    [MaxLength(500)] public string FonteOficial { get; set; } = string.Empty;
++    [MaxLength(500)] public string? FonteOficial { get; set; }
+     [Required, MaxLength(200)] public string ContatoEnvio { get; set; } = string.Empty;
+     [EnumDataType(typeof(TipoAutorEvento))] public TipoAutorEvento TipoAutor { get; set; } = TipoAutorEvento.Morador;
++
++    /// <summary>Foto opcional (JPEG, PNG ou WebP, até 2 MB).</summary>
++    public IFormFile? Foto { get; set; }
+ }
+ 
+ public class EventoDto
+@@ -49,6 +53,7 @@
+     public string Organizador { get; set; } = string.Empty;
+     public string FonteOficial { get; set; } = string.Empty;
+     public bool Destaque { get; set; }
++    public bool TemFoto { get; set; }
+     public StatusEvento Status { get; set; }
+     public TipoAutorEvento TipoAutor { get; set; }
+ 
+diff -ruN -x bin -x obj /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/wwwroot/css/styles.css TechFlowEventos/TechFlow.Eventos.Api/wwwroot/css/styles.css
+--- /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/wwwroot/css/styles.css	2026-11-05 00:09:30.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/wwwroot/css/styles.css	2026-11-06 00:03:20.875319514 +0000
+@@ -35,7 +35,12 @@
+ .empty-state{padding:24px;text-align:center;color:var(--muted);border:1.5px dashed var(--line);border-radius:var(--radius)}
+ /* cards de evento */
+ .ev-grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));margin-bottom:8px}
+-.ev-card{display:flex;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);color:inherit;text-decoration:none}
++.ev-card{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);color:inherit;text-decoration:none}
++.ev-corpo{display:flex;gap:14px;padding:14px}
++.ev-foto{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:var(--soft)}
++.ev-foto-grande{width:100%;max-height:420px;object-fit:cover;border-radius:var(--radius);margin-bottom:16px;display:block;background:var(--soft)}
++.foto-previa{max-width:100%;max-height:220px;margin-top:10px;border-radius:var(--radius);border:1px solid var(--line)}
++.mod-foto{max-width:220px;max-height:140px;object-fit:cover;border-radius:var(--radius);margin-bottom:8px;display:block}
+ .ev-card:hover{border-color:var(--green)}
+ .ev-card h3{margin-bottom:6px}
+ .ev-data{flex:none;width:58px;height:64px;border-radius:var(--radius);background:var(--orange);color:#1d1208;text-align:center;padding-top:6px}
+diff -ruN -x bin -x obj /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/wwwroot/divulgar.html TechFlowEventos/TechFlow.Eventos.Api/wwwroot/divulgar.html
+--- /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/wwwroot/divulgar.html	2026-11-05 00:10:09.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/wwwroot/divulgar.html	2026-11-06 00:03:20.875031556 +0000
+@@ -32,6 +32,10 @@
+           <div class="form-field cheio"><label for="e-mapa">Link do Google Maps (opcional)</label><input type="url" id="e-mapa" placeholder="Permite filtrar o evento por distância" />
+             <div class="form-hint">Abra o local no Google Maps e copie o link do pin.</div></div>
+           <div class="form-field cheio"><label for="e-atracoes">Atrações</label><textarea id="e-atracoes" maxlength="2000" style="min-height:80px"></textarea></div>
++          <div class="form-field cheio"><label for="e-foto">Foto do evento (opcional)</label>
++            <input type="file" id="e-foto" accept="image/jpeg,image/png,image/webp" />
++            <div class="form-hint">JPEG, PNG ou WebP. A imagem é reduzida automaticamente antes do envio (máximo de 2 MB).</div>
++            <img id="foto-previa" class="foto-previa" alt="Prévia da foto escolhida" hidden /></div>
+           <div class="form-field"><label for="e-preco">Preço em reais (0 para gratuito)</label><input type="number" id="e-preco" min="0" step="0.01" value="0" /></div>
+           <div class="form-field"><label for="e-ingressos">Ingressos ou inscrição</label><input type="text" id="e-ingressos" maxlength="500" /></div>
+           <div class="form-field"><label for="e-acessibilidade">Acessibilidade</label><input type="text" id="e-acessibilidade" maxlength="500" /></div>
+diff -ruN -x bin -x obj /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/divulgar.js TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/divulgar.js
+--- /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/divulgar.js	2026-11-05 00:09:30.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/divulgar.js	2026-11-06 00:03:20.875173799 +0000
+@@ -1,5 +1,29 @@
+ /* Divulgar evento: formulário público; o evento nasce pendente */
+ const v = (id) => document.getElementById(id).value.trim();
++const FOTO_MAX_BYTES = 2 * 1024 * 1024;
++
++/** Reduz a foto (lado maior de 1280 px) e converte para JPEG antes do envio. */
++async function prepararFoto(arquivo) {
++  if (!arquivo) return null;
++  if (!/^image\/(jpeg|png|webp)$/.test(arquivo.type)) throw new Error("Escolha uma foto JPEG, PNG ou WebP.");
++  if (!window.createImageBitmap) {
++    if (arquivo.size > FOTO_MAX_BYTES) throw new Error("A foto passa de 2 MB. Escolha uma imagem menor.");
++    return arquivo;
++  }
++  const bmp = await createImageBitmap(arquivo);
++  const escala = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
++  const canvas = document.createElement("canvas");
++  canvas.width = Math.round(bmp.width * escala);
++  canvas.height = Math.round(bmp.height * escala);
++  const ctx = canvas.getContext("2d");
++  ctx.fillStyle = "#fff"; // fundo branco para PNG/WebP com transparência
++  ctx.fillRect(0, 0, canvas.width, canvas.height);
++  ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
++  const blob = await new Promise((ok) => canvas.toBlob(ok, "image/jpeg", 0.85));
++  if (!blob) throw new Error("Não foi possível processar a foto.");
++  if (blob.size > FOTO_MAX_BYTES) throw new Error("A foto passa de 2 MB mesmo depois de reduzida. Escolha outra.");
++  return blob;
++}
+ 
+ document.addEventListener("DOMContentLoaded", async () => {
+   document.getElementById("e-data").min = EventosUI.iso(new Date());
+@@ -11,6 +35,13 @@
+     document.getElementById("erro").textContent = "Não foi possível carregar as categorias. Verifique se a API está no ar.";
+   }
+ 
++  document.getElementById("e-foto").addEventListener("change", (ev) => {
++    const previa = document.getElementById("foto-previa");
++    const arq = ev.target.files[0];
++    if (previa.src.startsWith("blob:")) URL.revokeObjectURL(previa.src);
++    if (arq) { previa.src = URL.createObjectURL(arq); previa.hidden = false; } else { previa.removeAttribute("src"); previa.hidden = true; }
++  });
++
+   document.getElementById("form-evento").addEventListener("submit", async (ev) => {
+     ev.preventDefault();
+     const erro = document.getElementById("erro");
+@@ -21,13 +52,18 @@
+     const botao = document.getElementById("btn-enviar");
+     botao.disabled = true;
+     try {
+-      await Api.enviarEvento({
+-        tipoAutor: Number(v("e-tipo")), titulo: v("e-titulo"), categoria: Number(v("e-categoria")),
+-        cidade: v("e-cidade"), data: v("e-data"), horario: `${v("e-horario")}:00`, endereco: v("e-endereco"),
+-        linkGoogleMaps: v("e-mapa") || null, atracoes: v("e-atracoes"), preco: Number(v("e-preco")) || 0,
+-        ingressos: v("e-ingressos"), acessibilidade: v("e-acessibilidade"),
+-        organizador: v("e-organizador"), fonteOficial: v("e-fonte"), contatoEnvio: v("e-contato"),
+-      });
++      const fd = new FormData();
++      const campos = {
++        TipoAutor: v("e-tipo"), Titulo: v("e-titulo"), Categoria: v("e-categoria"), Cidade: v("e-cidade"),
++        Data: v("e-data"), Horario: v("e-horario"), Endereco: v("e-endereco"), LinkGoogleMaps: v("e-mapa"),
++        Atracoes: v("e-atracoes"), Preco: v("e-preco") || "0", Ingressos: v("e-ingressos"),
++        Acessibilidade: v("e-acessibilidade"), Organizador: v("e-organizador"),
++        FonteOficial: v("e-fonte"), ContatoEnvio: v("e-contato"),
++      };
++      Object.entries(campos).forEach(([k, val]) => { if (val !== "") fd.append(k, val); });
++      const foto = await prepararFoto(document.getElementById("e-foto").files[0]);
++      if (foto) fd.append("Foto", foto, "foto.jpg");
++      await Api.enviarEvento(fd);
+       document.getElementById("painel").innerHTML = `
+         <h2>Evento enviado</h2>
+         <p>Recebemos “${escapeHtml(v("e-titulo") || "seu evento")}”. Um moderador vai conferir os dados antes de publicar.</p>
+diff -ruN -x bin -x obj /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/evento.js TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/evento.js
+--- /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/evento.js	2026-11-05 07:00:37.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/evento.js	2026-11-06 00:03:20.874497839 +0000
+@@ -9,6 +9,7 @@
+     const mapa = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(e.latitude != null ? `${e.latitude},${e.longitude}` : `${e.endereco}, ${e.cidade}`)}`;
+     alvo.innerHTML = `
+       <article class="detalhe">
++        ${e.temFoto ? `<img class="ev-foto-grande" src="${EventosUI.fotoUrl(e.id)}" alt="Foto do evento ${escapeHtml(e.titulo)}" />` : ""}
+         <span class="tag">${escapeHtml(e.categoriaNome)}</span>
+         <span class="tag ${e.gratuito ? "gratis" : ""}">${EventosUI.preco(e)}</span>
+         <h1 style="margin-top:8px">${escapeHtml(e.titulo)}</h1>
+diff -ruN -x bin -x obj /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/moderar.js TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/moderar.js
+--- /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/moderar.js	2026-11-05 00:09:30.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/moderar.js	2026-11-06 00:03:20.874833568 +0000
+@@ -11,6 +11,7 @@
+     alvo.innerHTML = lista.map((e) => `
+       <div class="mod-item" data-id="${e.id}">
+         <div>
++          ${e.temFoto ? `<img class="mod-foto" data-foto="${e.id}" alt="Foto enviada para ${escapeHtml(e.titulo)}" />` : ""}
+           <h3 style="margin-bottom:4px">${escapeHtml(e.titulo)}</h3>
+           <div class="ev-meta">${escapeHtml(EventosUI.dataLonga(e.data))}, ${EventosUI.hora(e.horario)}. ${escapeHtml(e.cidade)}, ${escapeHtml(e.endereco)}</div>
+           <div class="ev-meta">${escapeHtml(e.categoriaNome)}. ${EventosUI.preco(e)}. Organizador: ${escapeHtml(e.organizador)}. Fonte: ${EventosUI.linkOuTexto(e.fonteOficial)}</div>
+@@ -22,6 +23,9 @@
+           <button class="btn btn-small btn-perigo" data-acao="rejeitar">Rejeitar</button>
+         </div>
+       </div>`).join("");
++    alvo.querySelectorAll("[data-foto]").forEach(async (img) => {
++      try { img.src = await Api.obterFotoBlob(img.dataset.foto); } catch { img.remove(); }
++    });
+   } catch (e) {
+     alvo.innerHTML = EventosUI.vazio(e.status === 403 ? "Esta conta não tem permissão de moderador." : escapeHtml(e.message));
+   }
+diff -ruN -x bin -x obj /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/shared.js TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/shared.js
+--- /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/shared.js	2026-11-05 00:09:30.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/shared.js	2026-11-06 00:03:20.873796901 +0000
+@@ -19,9 +19,11 @@
+   const headers = {};
+   const auth = Session.obter();
+   if (auth?.token) headers.Authorization = `Bearer ${auth.token}`;
+-  if (body) headers["Content-Type"] = "application/json";
++  // FormData (upload de foto): o navegador define o Content-Type com o boundary.
++  const ehForm = body instanceof FormData;
++  if (body && !ehForm) headers["Content-Type"] = "application/json";
+ 
+-  const resp = await fetch(`${API_BASE}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
++  const resp = await fetch(`${API_BASE}${path}`, { method, headers, body: body ? (ehForm ? body : JSON.stringify(body)) : undefined });
+   if (resp.status === 204) return null;
+ 
+   const json = (resp.headers.get("content-type") || "").includes("json") ? await resp.json() : null;
+@@ -30,6 +32,7 @@
+     if (Array.isArray(json)) msg = json.join(" ");
+     else if (json?.erro) msg = json.erro;
+     else if (json?.errors) msg = Object.values(json.errors).flat().join(" ");
++    else if (resp.status === 413) msg = "O arquivo enviado é grande demais. Use uma foto menor.";
+     else if (resp.status === 401) msg = "Sua sessão expirou. Entre novamente.";
+     else if (resp.status === 403) msg = "Você não tem permissão para esta ação.";
+     const erro = new Error(msg);
+@@ -56,6 +59,14 @@
+   enviarEvento: (dto) => apiRequest("/eventos", { method: "POST", body: dto }),
+   listarEventosPendentes: () => apiRequest("/eventos/pendentes"),
+   moderarEvento: (id, dto) => apiRequest(`/eventos/${id}/moderar`, { method: "PATCH", body: dto }),
++
++  /** Foto de evento ainda não aprovado: só moderadores, então a busca leva o token e devolve uma URL local (blob). */
++  async obterFotoBlob(id) {
++    const auth = Session.obter();
++    const resp = await fetch(`${API_BASE}/eventos/${id}/foto`, { headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {} });
++    if (!resp.ok) throw new Error("Foto indisponível.");
++    return URL.createObjectURL(await resp.blob());
++  },
+ };
+ 
+ function escapeHtml(texto) {
+diff -ruN -x bin -x obj /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/ui.js TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/ui.js
+--- /tmp/antes/TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/ui.js	2026-11-05 00:09:30.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/ui.js	2026-11-06 00:03:20.874067813 +0000
+@@ -24,17 +24,21 @@
+       ? `<a href="${escapeHtml(txt)}" target="_blank" rel="noopener">${escapeHtml(txt)}</a>`
+       : escapeHtml(txt);
+   },
++  fotoUrl: (id) => `/api/eventos/${id}/foto`,
+   card(e) {
+     const { dia, mes } = this.diaMes(e.data);
+     const dist = e.distanciaKm != null ? ` (${e.distanciaKm} km)` : "";
+     return `
+       <a class="ev-card" href="evento.html?id=${e.id}">
+-        <div class="ev-data ${e.gratuito ? "gratis" : ""}"><strong>${dia}</strong><span>${mes}</span></div>
+-        <div>
+-          <h3>${escapeHtml(e.titulo)}</h3>
+-          <span class="tag">${escapeHtml(e.categoriaNome)}</span>
+-          <span class="tag ${e.gratuito ? "gratis" : ""}">${this.preco(e)}</span>
+-          <p class="ev-meta">${this.hora(e.horario)}, ${escapeHtml(e.cidade)}${dist}</p>
++        ${e.temFoto ? `<img class="ev-foto" src="${this.fotoUrl(e.id)}" alt="Foto do evento ${escapeHtml(e.titulo)}" loading="lazy" />` : ""}
++        <div class="ev-corpo">
++          <div class="ev-data ${e.gratuito ? "gratis" : ""}"><strong>${dia}</strong><span>${mes}</span></div>
++          <div>
++            <h3>${escapeHtml(e.titulo)}</h3>
++            <span class="tag">${escapeHtml(e.categoriaNome)}</span>
++            <span class="tag ${e.gratuito ? "gratis" : ""}">${this.preco(e)}</span>
++            <p class="ev-meta">${this.hora(e.horario)}, ${escapeHtml(e.cidade)}${dist}</p>
++          </div>
+         </div>
+       </a>`;
+   },
+diff -ruN -x bin -x obj /tmp/antes/TechFlowEventos/TechFlow.Eventos.Core/Imagens/TipoImagem.cs TechFlowEventos/TechFlow.Eventos.Core/Imagens/TipoImagem.cs
+--- /tmp/antes/TechFlowEventos/TechFlow.Eventos.Core/Imagens/TipoImagem.cs	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Core/Imagens/TipoImagem.cs	2026-11-06 00:02:40.745914175 +0000
+@@ -0,0 +1,25 @@
++namespace TechFlow.Eventos.Core.Imagens;
++
++public static class TipoImagem
++{
++    /// <summary>Tamanho máximo aceito para a foto de um evento.</summary>
++    public const int TamanhoMaximoBytes = 2 * 1024 * 1024;
++
++    /// <summary>
++    /// Identifica o formato pelos primeiros bytes (assinatura do arquivo). Retorna o content-type
++    /// ou null se não for JPEG, PNG ou WebP. Não confia no nome nem no Content-Type enviados pelo cliente.
++    /// </summary>
++    public static string? Detectar(ReadOnlySpan<byte> b)
++    {
++        if (b.Length >= 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF) return "image/jpeg";
++
++        if (b.Length >= 8 && b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47
++            && b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A) return "image/png";
++
++        // WebP: "RIFF" + tamanho (4 bytes) + "WEBP"
++        if (b.Length >= 12 && b[0] == 0x52 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x46
++            && b[8] == 0x57 && b[9] == 0x45 && b[10] == 0x42 && b[11] == 0x50) return "image/webp";
++
++        return null;
++    }
++}
+diff -ruN -x bin -x obj /tmp/antes/TechFlowEventos/TechFlow.Eventos.Core/Interfaces/IEventoRepository.cs TechFlowEventos/TechFlow.Eventos.Core/Interfaces/IEventoRepository.cs
+--- /tmp/antes/TechFlowEventos/TechFlow.Eventos.Core/Interfaces/IEventoRepository.cs	2026-11-05 00:07:51.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Core/Interfaces/IEventoRepository.cs	2026-11-06 00:02:40.779056866 +0000
+@@ -12,6 +12,7 @@
+ 
+     Task<IReadOnlyList<Evento>> ListarPorStatusAsync(StatusEvento status);
+     Task<IReadOnlyList<string>> ListarCidadesAprovadasAsync();
++    Task<EventoFoto?> ObterFotoAsync(int eventoId);
+     Task AdicionarAsync(Evento evento);
+     Task SalvarAlteracoesAsync();
+ }
+diff -ruN -x bin -x obj /tmp/antes/TechFlowEventos/TechFlow.Eventos.Core/Models/Evento.cs TechFlowEventos/TechFlow.Eventos.Core/Models/Evento.cs
+--- /tmp/antes/TechFlowEventos/TechFlow.Eventos.Core/Models/Evento.cs	2026-11-05 00:07:51.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Core/Models/Evento.cs	2026-11-06 00:02:40.778801548 +0000
+@@ -45,6 +45,12 @@
+     /// <summary>Id do usuário logado que enviou (nulo quando o envio é anônimo).</summary>
+     public string? UsuarioId { get; set; }
+ 
++    /// <summary>Indica se existe foto (evita carregar a imagem só para saber isso).</summary>
++    public bool TemFoto { get; set; }
++
++    /// <summary>Foto guardada em tabela separada. Só é carregada quando pedida explicitamente.</summary>
++    public EventoFoto? Foto { get; set; }
++
+     public bool Gratuito => Preco <= 0;
+ 
+     /// <summary>Data de hoje em Brasília (UTC-3), usada para esconder eventos que já passaram.</summary>
+diff -ruN -x bin -x obj /tmp/antes/TechFlowEventos/TechFlow.Eventos.Core/Models/EventoFoto.cs TechFlowEventos/TechFlow.Eventos.Core/Models/EventoFoto.cs
+--- /tmp/antes/TechFlowEventos/TechFlow.Eventos.Core/Models/EventoFoto.cs	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Core/Models/EventoFoto.cs	2026-11-06 00:02:40.741405190 +0000
+@@ -0,0 +1,16 @@
++namespace TechFlow.Eventos.Core.Models;
++
++/// <summary>
++/// Foto do evento, guardada no banco (bytea). Fica em tabela própria para que as listagens
++/// de eventos não carreguem os bytes da imagem.
++/// </summary>
++public class EventoFoto
++{
++    public int EventoId { get; set; }
++    public Evento? Evento { get; set; }
++
++    public byte[] Dados { get; set; } = Array.Empty<byte>();
++
++    /// <summary>image/jpeg, image/png ou image/webp (detectado pelo conteúdo, não pelo nome do arquivo).</summary>
++    public string ContentType { get; set; } = string.Empty;
++}
+diff -ruN -x bin -x obj /tmp/antes/TechFlowEventos/TechFlow.Eventos.Infra/Data/AppDbContext.cs TechFlowEventos/TechFlow.Eventos.Infra/Data/AppDbContext.cs
+--- /tmp/antes/TechFlowEventos/TechFlow.Eventos.Infra/Data/AppDbContext.cs	2026-11-05 00:07:51.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Infra/Data/AppDbContext.cs	2026-11-06 00:02:40.779330758 +0000
+@@ -11,6 +11,7 @@
+     }
+ 
+     public DbSet<Evento> Eventos => Set<Evento>();
++    public DbSet<EventoFoto> Fotos => Set<EventoFoto>();
+ 
+     protected override void OnModelCreating(ModelBuilder builder)
+     {
+@@ -32,6 +33,15 @@
+             e.Property(x => x.Preco).HasPrecision(10, 2);
+             e.Ignore(x => x.Gratuito);
+             e.HasIndex(x => new { x.Status, x.Data });
++            e.HasOne(x => x.Foto).WithOne(f => f.Evento).HasForeignKey<EventoFoto>(f => f.EventoId)
++             .OnDelete(DeleteBehavior.Cascade);
++        });
++
++        builder.Entity<EventoFoto>(f =>
++        {
++            f.HasKey(x => x.EventoId);
++            f.Property(x => x.Dados).IsRequired();
++            f.Property(x => x.ContentType).HasMaxLength(50).IsRequired();
+         });
+     }
+ }
+diff -ruN -x bin -x obj /tmp/antes/TechFlowEventos/TechFlow.Eventos.Infra/Repositories/EventoRepository.cs TechFlowEventos/TechFlow.Eventos.Infra/Repositories/EventoRepository.cs
+--- /tmp/antes/TechFlowEventos/TechFlow.Eventos.Infra/Repositories/EventoRepository.cs	2026-11-05 00:07:51.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Infra/Repositories/EventoRepository.cs	2026-11-06 00:02:40.779568453 +0000
+@@ -57,6 +57,9 @@
+         await _db.Eventos.Where(e => e.Status == StatusEvento.Aprovado)
+                          .Select(e => e.Cidade).Distinct().OrderBy(c => c).ToListAsync();
+ 
++    public Task<EventoFoto?> ObterFotoAsync(int eventoId) =>
++        _db.Fotos.AsNoTracking().FirstOrDefaultAsync(f => f.EventoId == eventoId);
++
+     public async Task AdicionarAsync(Evento evento) => await _db.Eventos.AddAsync(evento);
+ 
+     public Task SalvarAlteracoesAsync() => _db.SaveChangesAsync();

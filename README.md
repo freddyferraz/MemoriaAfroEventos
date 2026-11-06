@@ -12,6 +12,13 @@ Piloto: Sacra Família do Tinguá e região (RJ).
 
 **QR codes** (`/qr.html`, para moderadores): QR 1 aponta para a página principal e QR 2 para o cadastro de evento.
 
+### Fase 2: foto do evento
+
+- **Divulgar evento:** campo opcional de foto (JPEG, PNG ou WebP). O navegador reduz a imagem (lado maior de 1280 px, JPEG) antes de enviar; o servidor aceita até 2 MB e confere o formato pelo conteúdo do arquivo, não pelo nome.
+- **Armazenamento:** a foto fica no banco, na tabela `Fotos` (bytea), separada de `Eventos` para que as listagens não carreguem imagens. `Eventos.TemFoto` indica se existe foto.
+- **Exibição:** `GET /api/eventos/{id}/foto`. Pública para eventos aprovados (cache de 1 dia); para pendentes só moderadores, e a tela de moderação mostra a foto antes da aprovação. A foto aparece no card (Início e Explorar) e nos detalhes.
+- **Migration:** `dotnet ef migrations add AdicionaFotoEvento --project TechFlow.Eventos.Infra --startup-project TechFlow.Eventos.Api`
+
 ## Arquitetura (Clean Architecture, .NET 8)
 
 ```
@@ -22,7 +29,7 @@ TechFlow.Eventos.sln
 ```
 
 Principais endpoints: `GET /api/eventos` (filtros: `q, cidade, categoria, de, ate, precoMax, gratuito, destaque, lat, lng, distanciaKm`),
-`GET /api/eventos/{id}`, `POST /api/eventos`, `GET /api/eventos/pendentes`, `PATCH /api/eventos/{id}/moderar`,
+`GET /api/eventos/{id}`, `POST /api/eventos` (multipart/form-data), `GET /api/eventos/{id}/foto`, `GET /api/eventos/pendentes`, `PATCH /api/eventos/{id}/moderar`,
 `POST /api/auth/login`, `POST /api/auth/moderadores` (Admin).
 
 ## Rodando localmente

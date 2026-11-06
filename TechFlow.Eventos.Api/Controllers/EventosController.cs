@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using TechFlow.Eventos.Api.DTOs;
 using TechFlow.Eventos.Core.Enums;
 using TechFlow.Eventos.Core.Geo;
+using TechFlow.Eventos.Core.Imagens;
 using TechFlow.Eventos.Core.Interfaces;
 using TechFlow.Eventos.Core.Models;
 using TechFlow.Eventos.Infra.Data;
@@ -54,6 +55,31 @@ public class EventosController : ControllerBase
         return evento is null || evento.Status != StatusEvento.Aprovado ? NotFound() : Ok(ParaDto(evento));
     }
 
+    /// <summary>
+    /// Foto do evento. Pública para eventos aprovados; para pendentes/rejeitados só moderadores
+    /// (a tela de moderação busca a imagem com o token).
+    /// </summary>
+    [HttpGet("{id:int}/foto")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ObterFoto(int id)
+    {
+        var evento = await _repository.ObterPorIdAsync(id);
+        if (evento is null || !evento.TemFoto) return NotFound();
+
+        var publico = evento.Status == StatusEvento.Aprovado;
+        if (!publico && !User.IsInRole(DbSeeder.RoleAdmin) && !User.IsInRole(DbSeeder.RoleModerador))
+        {
+            return NotFound();
+        }
+
+        var foto = await _repository.ObterFotoAsync(id);
+        if (foto is null) return NotFound();
+
+        Response.Headers.CacheControl = publico ? "public, max-age=86400" : "private, no-store";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        return File(foto.Dados, foto.ContentType);
+    }
+
     /// <summary>Categorias disponíveis (alimenta os filtros e o formulário).</summary>
     [HttpGet("categorias")]
     [AllowAnonymous]
@@ -82,7 +108,9 @@ public class EventosController : ControllerBase
     /// <summary>"Divulgar evento": aberto ao público. O evento nasce Pendente e só aparece após aprovação.</summary>
     [HttpPost]
     [AllowAnonymous]
-    public async Task<ActionResult> Enviar(EventoCreateDto dto, CancellationToken ct)
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(4 * 1024 * 1024)]
+    public async Task<ActionResult> Enviar([FromForm] EventoCreateDto dto, CancellationToken ct)
     {
         if (dto.Data < Evento.HojeBrasil())
         {
@@ -102,13 +130,34 @@ public class EventosController : ControllerBase
             lng = coordenadas.Value.Longitude;
         }
 
+        EventoFoto? foto = null;
+        if (dto.Foto is { Length: > 0 })
+        {
+            if (dto.Foto.Length > TipoImagem.TamanhoMaximoBytes)
+            {
+                return BadRequest(new { erro = "A foto deve ter no máximo 2 MB." });
+            }
+
+            using var ms = new MemoryStream();
+            await dto.Foto.CopyToAsync(ms, ct);
+            var bytes = ms.ToArray();
+            var tipo = TipoImagem.Detectar(bytes);
+            if (tipo is null)
+            {
+                return BadRequest(new { erro = "Formato de foto não aceito. Use JPEG, PNG ou WebP." });
+            }
+
+            foto = new EventoFoto { Dados = bytes, ContentType = tipo };
+        }
+
         var evento = new Evento
         {
             Titulo = dto.Titulo.Trim(), Categoria = dto.Categoria, Cidade = dto.Cidade.Trim(),
             Endereco = dto.Endereco.Trim(), Latitude = lat, Longitude = lng,
-            Data = dto.Data, Horario = dto.Horario, Atracoes = dto.Atracoes, Preco = dto.Preco,
-            Acessibilidade = dto.Acessibilidade, Ingressos = dto.Ingressos,
-            Organizador = dto.Organizador.Trim(), FonteOficial = dto.FonteOficial,
+            Data = dto.Data, Horario = dto.Horario, Atracoes = dto.Atracoes?.Trim() ?? string.Empty, Preco = dto.Preco,
+            Acessibilidade = dto.Acessibilidade?.Trim() ?? string.Empty, Ingressos = dto.Ingressos?.Trim() ?? string.Empty,
+            Organizador = dto.Organizador.Trim(), FonteOficial = dto.FonteOficial?.Trim() ?? string.Empty,
+            TemFoto = foto is not null, Foto = foto,
             ContatoEnvio = dto.ContatoEnvio.Trim(), TipoAutor = dto.TipoAutor,
             Status = StatusEvento.Pendente,
             UsuarioId = User.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -150,7 +199,7 @@ public class EventosController : ControllerBase
         Cidade = e.Cidade, Endereco = e.Endereco, Latitude = e.Latitude, Longitude = e.Longitude,
         Data = e.Data, Horario = e.Horario, Atracoes = e.Atracoes, Preco = e.Preco, Gratuito = e.Gratuito,
         Acessibilidade = e.Acessibilidade, Ingressos = e.Ingressos, Organizador = e.Organizador,
-        FonteOficial = e.FonteOficial, Destaque = e.Destaque, Status = e.Status, TipoAutor = e.TipoAutor,
+        FonteOficial = e.FonteOficial, Destaque = e.Destaque, TemFoto = e.TemFoto, Status = e.Status, TipoAutor = e.TipoAutor,
         DistanciaKm = origem is { } o && e.Latitude is { } la && e.Longitude is { } lo
             ? Math.Round(o.DistanciaKm(new Coordenadas(la, lo)), 1)
             : null

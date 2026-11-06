@@ -11,6 +11,7 @@ async function carregarPendentes() {
     alvo.innerHTML = lista.map((e) => `
       <div class="mod-item" data-id="${e.id}">
         <div>
+          ${e.temFoto ? `<img class="mod-foto" data-foto="${e.id}" alt="Foto enviada para ${escapeHtml(e.titulo)}" />` : ""}
           <h3 style="margin-bottom:4px">${escapeHtml(e.titulo)}</h3>
           <div class="ev-meta">${escapeHtml(EventosUI.dataLonga(e.data))}, ${EventosUI.hora(e.horario)}. ${escapeHtml(e.cidade)}, ${escapeHtml(e.endereco)}</div>
           <div class="ev-meta">${escapeHtml(e.categoriaNome)}. ${EventosUI.preco(e)}. Organizador: ${escapeHtml(e.organizador)}. Fonte: ${EventosUI.linkOuTexto(e.fonteOficial)}</div>
@@ -22,6 +23,9 @@ async function carregarPendentes() {
           <button class="btn btn-small btn-perigo" data-acao="rejeitar">Rejeitar</button>
         </div>
       </div>`).join("");
+    alvo.querySelectorAll("[data-foto]").forEach(async (img) => {
+      try { img.src = await Api.obterFotoBlob(img.dataset.foto); } catch { img.remove(); }
+    });
   } catch (e) {
     alvo.innerHTML = EventosUI.vazio(e.status === 403 ? "Esta conta não tem permissão de moderador." : escapeHtml(e.message));
   }

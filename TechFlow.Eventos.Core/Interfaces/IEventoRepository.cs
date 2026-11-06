@@ -12,6 +12,7 @@ public interface IEventoRepository
 
     Task<IReadOnlyList<Evento>> ListarPorStatusAsync(StatusEvento status);
     Task<IReadOnlyList<string>> ListarCidadesAprovadasAsync();
+    Task<EventoFoto?> ObterFotoAsync(int eventoId);
     Task AdicionarAsync(Evento evento);
     Task SalvarAlteracoesAsync();
 }

@@ -19,9 +19,11 @@ async function apiRequest(path, { method = "GET", body } = {}) {
   const headers = {};
   const auth = Session.obter();
   if (auth?.token) headers.Authorization = `Bearer ${auth.token}`;
-  if (body) headers["Content-Type"] = "application/json";
+  // FormData (upload de foto): o navegador define o Content-Type com o boundary.
+  const ehForm = body instanceof FormData;
+  if (body && !ehForm) headers["Content-Type"] = "application/json";
 
-  const resp = await fetch(`${API_BASE}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  const resp = await fetch(`${API_BASE}${path}`, { method, headers, body: body ? (ehForm ? body : JSON.stringify(body)) : undefined });
   if (resp.status === 204) return null;
 
   const json = (resp.headers.get("content-type") || "").includes("json") ? await resp.json() : null;
@@ -30,6 +32,7 @@ async function apiRequest(path, { method = "GET", body } = {}) {
     if (Array.isArray(json)) msg = json.join(" ");
     else if (json?.erro) msg = json.erro;
     else if (json?.errors) msg = Object.values(json.errors).flat().join(" ");
+    else if (resp.status === 413) msg = "O arquivo enviado é grande demais. Use uma foto menor.";
     else if (resp.status === 401) msg = "Sua sessão expirou. Entre novamente.";
     else if (resp.status === 403) msg = "Você não tem permissão para esta ação.";
     const erro = new Error(msg);
@@ -56,6 +59,14 @@ const Api = {
   enviarEvento: (dto) => apiRequest("/eventos", { method: "POST", body: dto }),
   listarEventosPendentes: () => apiRequest("/eventos/pendentes"),
   moderarEvento: (id, dto) => apiRequest(`/eventos/${id}/moderar`, { method: "PATCH", body: dto }),
+
+  /** Foto de evento ainda não aprovado: só moderadores, então a busca leva o token e devolve uma URL local (blob). */
+  async obterFotoBlob(id) {
+    const auth = Session.obter();
+    const resp = await fetch(`${API_BASE}/eventos/${id}/foto`, { headers: auth?.token ? { Authorization: `Bearer ${auth.token}` } : {} });
+    if (!resp.ok) throw new Error("Foto indisponível.");
+    return URL.createObjectURL(await resp.blob());
+  },
 };
 
 function escapeHtml(texto) {

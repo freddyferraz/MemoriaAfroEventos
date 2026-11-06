@@ -244,20 +244,67 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .ev-grid {
     display: grid;
     gap: 16px;
-    grid-template-columns: repeat(auto-fill,minmax(290px,1fr));
+    grid-template-columns: repeat(auto-fill,minmax(330px,1fr));
     margin-bottom: 8px
 }
 
 .ev-card {
     display: flex;
-    gap: 14px;
+    flex-direction: column;
     background: var(--card);
     border: 1px solid var(--line);
     border-radius: var(--radius);
-    padding: 14px;
+    overflow: hidden;
     box-shadow: var(--shadow);
     color: inherit;
     text-decoration: none
+}
+
+.ev-corpo {
+    display: flex;
+    gap: 14px;
+    padding: 14px
+}
+
+.ev-mini {
+    flex: none;
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: var(--radius);
+    background: var(--soft)
+}
+
+.ev-texto {
+    min-width: 0
+}
+
+.ev-foto-detalhe {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: min(100%, 320px);
+    max-height: 320px;
+    border-radius: var(--radius);
+    margin: 0 0 18px;
+    background: var(--soft);
+}
+
+.foto-previa {
+    max-width: 100%;
+    max-height: 220px;
+    margin-top: 10px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line)
+}
+
+.mod-foto {
+    max-width: 220px;
+    max-height: 140px;
+    object-fit: cover;
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    display: block
 }
 
     .ev-card:hover {

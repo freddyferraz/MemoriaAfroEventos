@@ -57,6 +57,9 @@ public class EventoRepository : IEventoRepository
         await _db.Eventos.Where(e => e.Status == StatusEvento.Aprovado)
                          .Select(e => e.Cidade).Distinct().OrderBy(c => c).ToListAsync();
 
+    public Task<EventoFoto?> ObterFotoAsync(int eventoId) =>
+        _db.Fotos.AsNoTracking().FirstOrDefaultAsync(f => f.EventoId == eventoId);
+
     public async Task AdicionarAsync(Evento evento) => await _db.Eventos.AddAsync(evento);
 
     public Task SalvarAlteracoesAsync() => _db.SaveChangesAsync();

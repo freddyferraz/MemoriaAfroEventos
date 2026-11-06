@@ -19,14 +19,18 @@ public class EventoCreateDto
     [Required] public DateOnly Data { get; set; }
     [Required] public TimeOnly Horario { get; set; }
 
-    [MaxLength(2000)] public string Atracoes { get; set; } = string.Empty;
+    // Opcionais: nullable porque, em multipart/form-data, texto vazio chega como null.
+    [MaxLength(2000)] public string? Atracoes { get; set; }
     [Range(0, 100000)] public decimal Preco { get; set; }
-    [MaxLength(500)] public string Acessibilidade { get; set; } = string.Empty;
-    [MaxLength(500)] public string Ingressos { get; set; } = string.Empty;
+    [MaxLength(500)] public string? Acessibilidade { get; set; }
+    [MaxLength(500)] public string? Ingressos { get; set; }
     [Required, MaxLength(200)] public string Organizador { get; set; } = string.Empty;
-    [MaxLength(500)] public string FonteOficial { get; set; } = string.Empty;
+    [MaxLength(500)] public string? FonteOficial { get; set; }
     [Required, MaxLength(200)] public string ContatoEnvio { get; set; } = string.Empty;
     [EnumDataType(typeof(TipoAutorEvento))] public TipoAutorEvento TipoAutor { get; set; } = TipoAutorEvento.Morador;
+
+    /// <summary>Foto opcional (JPEG, PNG ou WebP, até 2 MB).</summary>
+    public IFormFile? Foto { get; set; }
 }
 
 public class EventoDto
@@ -49,6 +53,7 @@ public class EventoDto
     public string Organizador { get; set; } = string.Empty;
     public string FonteOficial { get; set; } = string.Empty;
     public bool Destaque { get; set; }
+    public bool TemFoto { get; set; }
     public StatusEvento Status { get; set; }
     public TipoAutorEvento TipoAutor { get; set; }
 

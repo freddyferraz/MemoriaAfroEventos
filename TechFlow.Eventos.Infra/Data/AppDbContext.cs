@@ -11,6 +11,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     }
 
     public DbSet<Evento> Eventos => Set<Evento>();
+    public DbSet<EventoFoto> Fotos => Set<EventoFoto>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -32,6 +33,15 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             e.Property(x => x.Preco).HasPrecision(10, 2);
             e.Ignore(x => x.Gratuito);
             e.HasIndex(x => new { x.Status, x.Data });
+            e.HasOne(x => x.Foto).WithOne(f => f.Evento).HasForeignKey<EventoFoto>(f => f.EventoId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<EventoFoto>(f =>
+        {
+            f.HasKey(x => x.EventoId);
+            f.Property(x => x.Dados).IsRequired();
+            f.Property(x => x.ContentType).HasMaxLength(50).IsRequired();
         });
     }
 }

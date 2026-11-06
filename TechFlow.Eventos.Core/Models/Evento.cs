@@ -45,6 +45,12 @@ public class Evento
     /// <summary>Id do usuário logado que enviou (nulo quando o envio é anônimo).</summary>
     public string? UsuarioId { get; set; }
 
+    /// <summary>Indica se existe foto (evita carregar a imagem só para saber isso).</summary>
+    public bool TemFoto { get; set; }
+
+    /// <summary>Foto guardada em tabela separada. Só é carregada quando pedida explicitamente.</summary>
+    public EventoFoto? Foto { get; set; }
+
     public bool Gratuito => Preco <= 0;
 
     /// <summary>Data de hoje em Brasília (UTC-3), usada para esconder eventos que já passaram.</summary>
