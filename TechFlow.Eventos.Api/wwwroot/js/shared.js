@@ -102,7 +102,7 @@ function montarHeader(paginaAtual) {
 
   document.getElementById("site-header").innerHTML = `
     <div class="container">
-      <a class="brand" href="index.html"><b>COONECTA</b><i> CULTURA</i></a>
+      <a class="brand" href="index.html"><b>CONECTA</b><i> CULTURA</i></a>
       <nav class="main-nav" aria-label="Navegação principal">${links}</nav>
       <div>${acesso}</div>
     </div>`;
