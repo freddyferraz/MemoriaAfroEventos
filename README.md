@@ -12,6 +12,27 @@ Piloto: Sacra Família do Tinguá e região (RJ).
 
 **QR codes** (`/qr.html`, para moderadores): QR 1 aponta para a página principal e QR 2 para o cadastro de evento.
 
+### Fase 3: newsletter por preferência (módulo Newsletter)
+
+- **Inscrição** (`/newsletter.html`): e-mail, categorias e cidades de interesse (vazio = todas) e aceite do consentimento (LGPD).
+- **Confirmação (double opt-in):** a pessoa recebe um e-mail com link de confirmação. Só assinantes confirmados recebem eventos.
+- **Envio:** quando um moderador **aprova** um evento, ele entra numa fila e o módulo envia um e-mail aos assinantes cujas preferências combinam. Cada assinante recebe o mesmo evento no máximo uma vez, e eventos já passados não são enviados.
+- **Cancelamento:** link no rodapé de todo e-mail; remove o assinante e o histórico de envios.
+- **Proteções:** limite de 5 pedidos de inscrição por hora por IP; a resposta de inscrição não revela se o e-mail já existe.
+- **Modularidade:** o módulo vive em `Core/Newsletter` e `Infra/Newsletter`. O módulo de Eventos só conhece a interface `IEventoPublicadoHandler`; o módulo se liga em uma linha (`AddNewsletterModule`) e se remove apagando essa linha.
+- **Migration:** `dotnet ef migrations add AdicionaNewsletter --project TechFlow.Eventos.Infra --startup-project TechFlow.Eventos.Api`
+
+**Envio de e-mail (Brevo).** O Render bloqueia SMTP (portas 25, 465 e 587) em serviços gratuitos, então o envio usa a API HTTP do Brevo (plano gratuito: 300 e-mails/dia). Crie a conta, verifique um remetente em *Senders, Domains & Dedicated IPs* e gere uma chave de API. Variáveis:
+
+| Variável | Uso |
+|---|---|
+| `App__BaseUrl` | endereço público do site (links dos e-mails), ex.: `https://seu-app.onrender.com` |
+| `Email__Brevo__ApiKey` | chave de API do Brevo |
+| `Email__RemetenteEmail` | e-mail remetente já verificado no Brevo |
+| `Email__RemetenteNome` | nome exibido (padrão: TechFlow Eventos) |
+
+Sem `ApiKey` e remetente, o sistema não envia nada: os e-mails só aparecem no log (útil em desenvolvimento, pois os links de confirmação ficam visíveis no console).
+
 ### Fase 2: foto do evento
 
 - **Divulgar evento:** campo opcional de foto (JPEG, PNG ou WebP). O navegador reduz a imagem (lado maior de 1280 px, JPEG) antes de enviar; o servidor aceita até 2 MB e confere o formato pelo conteúdo do arquivo, não pelo nome.
@@ -75,4 +96,5 @@ O `Dockerfile` da raiz publica a API; a porta vem de `PORT`.
 
 - Paginação da lista de eventos e limite de envios por IP em `POST /api/eventos` (endpoint público).
 - Eventos recorrentes (cada ocorrência é um cadastro).
+- Newsletter: a fila de envio é em memória (se a aplicação reiniciar com envios pendentes, eles se perdem); não há edição de preferências depois de confirmado (a pessoa cancela e se inscreve de novo); falta uma página de política de privacidade para linkar no consentimento.
 - Testes automatizados.

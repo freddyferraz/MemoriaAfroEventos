@@ -18,5 +18,8 @@ services:
       Seed__AdminEmail: ${SEED_ADMIN_EMAIL:?defina no .env}
       Seed__AdminSenha: ${SEED_ADMIN_SENHA:?defina no .env}
       Seed__EventosDemo: "true"
+      App__BaseUrl: ${APP_BASE_URL:-http://localhost:8080}
+      Email__Brevo__ApiKey: ${BREVO_API_KEY:-}
+      Email__RemetenteEmail: ${EMAIL_REMETENTE:-}
 volumes:
   dbdata:

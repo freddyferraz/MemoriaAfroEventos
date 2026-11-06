@@ -1,10 +1,14 @@
 using System.Text;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using TechFlow.Eventos.Infra;
 using TechFlow.Eventos.Infra.Data;
+using TechFlow.Eventos.Infra.Newsletter;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,6 +37,24 @@ if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("Default
 }
 
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddNewsletterModule(builder.Configuration);
+
+// Atrás do proxy do Render, o IP real do visitante vem em X-Forwarded-For (necessário para o limite por IP).
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    o.KnownNetworks.Clear();
+    o.KnownProxies.Clear();
+});
+
+// Limite de pedidos de inscrição na newsletter: 5 por hora por IP.
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.AddPolicy("newsletter", ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "desconhecido",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromHours(1), QueueLimit = 0 }));
+});
 
 // ---------- JWT ----------
 var jwt = builder.Configuration.GetSection("Jwt");
@@ -87,6 +109,7 @@ builder.Services.AddSwaggerGen(o =>
 });
 
 var app = builder.Build();
+app.UseForwardedHeaders();
 
 // Porta definida pela plataforma (Render). Localmente vale o launchSettings/ASPNETCORE_URLS.
 var port = Environment.GetEnvironmentVariable("PORT");
@@ -113,6 +136,7 @@ if (app.Environment.IsDevelopment()) app.UseHttpsRedirection();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseCors(corsPolicy);
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

@@ -1,0 +1,11 @@
+/* Módulo Newsletter: estilos próprios, sem alterar o styles.css */
+.cta{background:var(--soft);border:1px solid var(--line);border-radius:var(--radius-lg);padding:24px;display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:40px}
+.cta h2{margin:0 0 4px}.cta p{margin:0;color:var(--muted)}
+.opcoes{border:1.5px solid var(--line);border-radius:var(--radius);padding:12px 14px;margin:0 0 16px}
+.opcoes legend{font-weight:700;font-size:.88rem;padding:0 6px}
+.opcoes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px 14px}
+.opcoes label{display:flex;gap:8px;align-items:center;font-weight:500;margin:0}
+.aceite{display:flex;gap:10px;align-items:flex-start;font-size:.9rem;margin:6px 0 16px}
+.aceite input{margin-top:4px}
+.msg-box{border-radius:var(--radius-lg);padding:24px;background:var(--card);border:1px solid var(--line);text-align:center}
+.msg-box.erro{border-color:var(--danger)}

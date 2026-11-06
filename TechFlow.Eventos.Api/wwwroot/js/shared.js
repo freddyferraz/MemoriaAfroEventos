@@ -58,6 +58,9 @@ const Api = {
   listarCidadesEvento: () => apiRequest("/eventos/cidades"),
   enviarEvento: (dto) => apiRequest("/eventos", { method: "POST", body: dto }),
   listarEventosPendentes: () => apiRequest("/eventos/pendentes"),
+  assinarNewsletter: (dto) => apiRequest("/newsletter/assinar", { method: "POST", body: dto }),
+  confirmarNewsletter: (token) => apiRequest("/newsletter/confirmar", { method: "POST", body: { token } }),
+  cancelarNewsletter: (token) => apiRequest("/newsletter/cancelar", { method: "POST", body: { token } }),
   moderarEvento: (id, dto) => apiRequest(`/eventos/${id}/moderar`, { method: "PATCH", body: dto }),
 
   /** Foto de evento ainda não aprovado: só moderadores, então a busca leva o token e devolve uma URL local (blob). */
@@ -91,6 +94,7 @@ function montarHeader(paginaAtual) {
     { href: "index.html", label: "Início" },
     { href: "explorar.html", label: "Explorar" },
     { href: "divulgar.html", label: "Divulgar evento" },
+    { href: "newsletter.html", label: "Newsletter" },
   ];
   if (Session.ehModerador()) {
     paginas.push({ href: "moderar.html", label: "Moderar" }, { href: "qr.html", label: "QR codes" });

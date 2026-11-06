@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Newsletter — TechFlow Eventos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Figtree:wght@400;500;700&display=swap" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/newsletter.css" />
+</head>
+<body data-pagina="newsletter.html">
+  <header id="site-header" class="site-header"></header>
+
+  <div class="page-heading">
+    <h1>Newsletter de eventos</h1>
+    <p class="page-subtitle">Receba por e-mail os eventos novos que combinam com seus interesses.</p>
+  </div>
+
+  <div class="container" style="max-width:720px;padding-bottom:72px">
+    <div id="resultado" role="status" aria-live="polite"></div>
+
+    <form class="form-panel" id="form-newsletter" novalidate>
+      <div class="form-field">
+        <label for="n-email">Seu e-mail *</label>
+        <input type="email" id="n-email" autocomplete="email" maxlength="254" required />
+      </div>
+
+      <fieldset class="opcoes">
+        <legend>Categorias de interesse</legend>
+        <div class="opcoes-grid" id="lista-categorias"></div>
+        <div class="form-hint">Sem marcar nenhuma, você recebe todas as categorias.</div>
+      </fieldset>
+
+      <fieldset class="opcoes" id="bloco-cidades" hidden>
+        <legend>Cidades</legend>
+        <div class="opcoes-grid" id="lista-cidades"></div>
+        <div class="form-hint">Sem marcar nenhuma, você recebe eventos de todas as cidades.</div>
+      </fieldset>
+
+      <label class="aceite">
+        <input type="checkbox" id="n-aceite" />
+        <span>Concordo em receber e-mails da TechFlow Eventos com novos eventos conforme as preferências acima.
+          Uso meu e-mail apenas para isso e posso cancelar a qualquer momento pelo link no final de cada mensagem.</span>
+      </label>
+
+      <p class="erro-form" id="erro" role="alert"></p>
+      <button type="submit" class="btn btn-primary btn-block" id="btn-assinar">Quero receber</button>
+    </form>
+  </div>
+
+  <footer id="site-footer" class="site-footer"></footer>
+  <script src="js/shared.js"></script>
+  <script src="js/newsletter.js"></script>
+</body>
+</html>

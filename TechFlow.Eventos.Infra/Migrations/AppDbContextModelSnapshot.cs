@@ -270,6 +270,85 @@ namespace TechFlow.Eventos.Infra.Migrations
                     b.ToTable("Fotos");
                 });
 
+            modelBuilder.Entity("TechFlow.Eventos.Core.Newsletter.Assinante", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int[]>("Categorias")
+                        .IsRequired()
+                        .HasColumnType("integer[]");
+
+                    b.Property<string[]>("Cidades")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<DateTime?>("ConfirmacaoEnviadaEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Confirmado")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("DataAceite")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("DataCadastro")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DataConfirmacao")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.ToTable("Assinantes");
+                });
+
+            modelBuilder.Entity("TechFlow.Eventos.Core.Newsletter.EnvioNewsletter", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AssinanteId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("EnviadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("EventoId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssinanteId");
+
+                    b.HasIndex("EventoId", "AssinanteId")
+                        .IsUnique();
+
+                    b.ToTable("EnviosNewsletter");
+                });
+
             modelBuilder.Entity("TechFlow.Eventos.Infra.Data.ApplicationUser", b =>
                 {
                     b.Property<string>("Id")
@@ -399,6 +478,21 @@ namespace TechFlow.Eventos.Infra.Migrations
                         .IsRequired();
 
                     b.Navigation("Evento");
+                });
+
+            modelBuilder.Entity("TechFlow.Eventos.Core.Newsletter.EnvioNewsletter", b =>
+                {
+                    b.HasOne("TechFlow.Eventos.Core.Newsletter.Assinante", null)
+                        .WithMany()
+                        .HasForeignKey("AssinanteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TechFlow.Eventos.Core.Models.Evento", null)
+                        .WithMany()
+                        .HasForeignKey("EventoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("TechFlow.Eventos.Core.Models.Evento", b =>

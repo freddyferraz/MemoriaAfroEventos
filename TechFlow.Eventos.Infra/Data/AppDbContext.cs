@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using TechFlow.Eventos.Core.Models;
+using TechFlow.Eventos.Core.Newsletter;
+using TechFlow.Eventos.Infra.Newsletter;
 
 namespace TechFlow.Eventos.Infra.Data;
 
@@ -12,6 +14,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<Evento> Eventos => Set<Evento>();
     public DbSet<EventoFoto> Fotos => Set<EventoFoto>();
+    public DbSet<Assinante> Assinantes => Set<Assinante>();
+    public DbSet<EnvioNewsletter> EnviosNewsletter => Set<EnvioNewsletter>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -43,5 +47,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             f.Property(x => x.Dados).IsRequired();
             f.Property(x => x.ContentType).HasMaxLength(50).IsRequired();
         });
+
+        NewsletterModelConfig.Aplicar(builder);
     }
 }

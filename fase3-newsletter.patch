@@ -1,0 +1,1119 @@
+diff -ruN -x bin -x obj /tmp/antes3/.env.example TechFlowEventos/.env.example
+--- /tmp/antes3/.env.example	2026-11-06 01:27:43.738294983 +0000
++++ TechFlowEventos/.env.example	2026-11-06 01:28:48.702870930 +0000
+@@ -3,3 +3,7 @@
+ JWT_KEY=gere-uma-chave-aleatoria-com-no-minimo-32-caracteres
+ SEED_ADMIN_EMAIL=admin@seudominio.com.br
+ SEED_ADMIN_SENHA=defina-uma-senha-forte
++# Newsletter (opcional; sem isso os e-mails só aparecem no log)
++BREVO_API_KEY=
++EMAIL_REMETENTE=
++APP_BASE_URL=http://localhost:8080
+diff -ruN -x bin -x obj /tmp/antes3/README.md TechFlowEventos/README.md
+--- /tmp/antes3/README.md	2026-11-06 01:27:43.738385124 +0000
++++ TechFlowEventos/README.md	2026-11-06 01:28:48.702541445 +0000
+@@ -12,6 +12,27 @@
+ 
+ **QR codes** (`/qr.html`, para moderadores): QR 1 aponta para a página principal e QR 2 para o cadastro de evento.
+ 
++### Fase 3: newsletter por preferência (módulo Newsletter)
++
++- **Inscrição** (`/newsletter.html`): e-mail, categorias e cidades de interesse (vazio = todas) e aceite do consentimento (LGPD).
++- **Confirmação (double opt-in):** a pessoa recebe um e-mail com link de confirmação. Só assinantes confirmados recebem eventos.
++- **Envio:** quando um moderador **aprova** um evento, ele entra numa fila e o módulo envia um e-mail aos assinantes cujas preferências combinam. Cada assinante recebe o mesmo evento no máximo uma vez, e eventos já passados não são enviados.
++- **Cancelamento:** link no rodapé de todo e-mail; remove o assinante e o histórico de envios.
++- **Proteções:** limite de 5 pedidos de inscrição por hora por IP; a resposta de inscrição não revela se o e-mail já existe.
++- **Modularidade:** o módulo vive em `Core/Newsletter` e `Infra/Newsletter`. O módulo de Eventos só conhece a interface `IEventoPublicadoHandler`; o módulo se liga em uma linha (`AddNewsletterModule`) e se remove apagando essa linha.
++- **Migration:** `dotnet ef migrations add AdicionaNewsletter --project TechFlow.Eventos.Infra --startup-project TechFlow.Eventos.Api`
++
++**Envio de e-mail (Brevo).** O Render bloqueia SMTP (portas 25, 465 e 587) em serviços gratuitos, então o envio usa a API HTTP do Brevo (plano gratuito: 300 e-mails/dia). Crie a conta, verifique um remetente em *Senders, Domains & Dedicated IPs* e gere uma chave de API. Variáveis:
++
++| Variável | Uso |
++|---|---|
++| `App__BaseUrl` | endereço público do site (links dos e-mails), ex.: `https://seu-app.onrender.com` |
++| `Email__Brevo__ApiKey` | chave de API do Brevo |
++| `Email__RemetenteEmail` | e-mail remetente já verificado no Brevo |
++| `Email__RemetenteNome` | nome exibido (padrão: TechFlow Eventos) |
++
++Sem `ApiKey` e remetente, o sistema não envia nada: os e-mails só aparecem no log (útil em desenvolvimento, pois os links de confirmação ficam visíveis no console).
++
+ ### Fase 2: foto do evento
+ 
+ - **Divulgar evento:** campo opcional de foto (JPEG, PNG ou WebP). O navegador reduz a imagem (lado maior de 1280 px, JPEG) antes de enviar; o servidor aceita até 2 MB e confere o formato pelo conteúdo do arquivo, não pelo nome.
+@@ -75,4 +96,5 @@
+ 
+ - Paginação da lista de eventos e limite de envios por IP em `POST /api/eventos` (endpoint público).
+ - Eventos recorrentes (cada ocorrência é um cadastro).
++- Newsletter: a fila de envio é em memória (se a aplicação reiniciar com envios pendentes, eles se perdem); não há edição de preferências depois de confirmado (a pessoa cancela e se inscreve de novo); falta uma página de política de privacidade para linkar no consentimento.
+ - Testes automatizados.
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Api/Controllers/EventosController.cs TechFlowEventos/TechFlow.Eventos.Api/Controllers/EventosController.cs
+--- /tmp/antes3/TechFlow.Eventos.Api/Controllers/EventosController.cs	2026-11-06 01:27:43.737116744 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/Controllers/EventosController.cs	2026-11-06 01:28:16.384705337 +0000
+@@ -19,11 +19,13 @@
+ 
+     private readonly IEventoRepository _repository;
+     private readonly IGeoLinkService _geo;
++    private readonly IEnumerable<IEventoPublicadoHandler> _aoPublicar;
+ 
+-    public EventosController(IEventoRepository repository, IGeoLinkService geo)
++    public EventosController(IEventoRepository repository, IGeoLinkService geo, IEnumerable<IEventoPublicadoHandler> aoPublicar)
+     {
+         _repository = repository;
+         _geo = geo;
++        _aoPublicar = aoPublicar;
+     }
+ 
+     /// <summary>Explorar eventos: só aprovados, de hoje em diante, com os filtros do MVP.</summary>
+@@ -172,14 +174,22 @@
+     /// <summary>Aprova ou rejeita um evento (e define se vai para os destaques). Restrito a Admin/Moderador.</summary>
+     [HttpPatch("{id:int}/moderar")]
+     [Authorize(Roles = Moderadores)]
+-    public async Task<IActionResult> Moderar(int id, EventoModerarDto dto)
++    public async Task<IActionResult> Moderar(int id, EventoModerarDto dto, CancellationToken ct)
+     {
+         var evento = await _repository.ObterPorIdAsync(id);
+         if (evento is null) return NotFound();
+ 
++        var jaEstavaAprovado = evento.Status == StatusEvento.Aprovado;
+         evento.Status = dto.NovoStatus;
+         evento.Destaque = dto.NovoStatus == StatusEvento.Aprovado && dto.Destaque;
+         await _repository.SalvarAlteracoesAsync();
++
++        // Outros módulos (ex.: newsletter) reagem à publicação sem que este controller os conheça.
++        if (!jaEstavaAprovado && evento.Status == StatusEvento.Aprovado)
++        {
++            foreach (var handler in _aoPublicar) await handler.AoPublicarAsync(evento, ct);
++        }
++
+         return NoContent();
+     }
+ 
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Api/Controllers/NewsletterController.cs TechFlowEventos/TechFlow.Eventos.Api/Controllers/NewsletterController.cs
+--- /tmp/antes3/TechFlow.Eventos.Api/Controllers/NewsletterController.cs	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/Controllers/NewsletterController.cs	2026-11-06 01:28:16.375380996 +0000
+@@ -0,0 +1,68 @@
++using Microsoft.AspNetCore.Authorization;
++using Microsoft.AspNetCore.Mvc;
++using Microsoft.AspNetCore.RateLimiting;
++using TechFlow.Eventos.Api.DTOs;
++using TechFlow.Eventos.Core.Newsletter;
++
++namespace TechFlow.Eventos.Api.Controllers;
++
++/// <summary>Módulo Newsletter: inscrição com confirmação por e-mail (double opt-in) e cancelamento.</summary>
++[ApiController]
++[Route("api/[controller]")]
++public class NewsletterController : ControllerBase
++{
++    private readonly NewsletterService _service;
++    private readonly ILogger<NewsletterController> _log;
++
++    public NewsletterController(NewsletterService service, ILogger<NewsletterController> log)
++    {
++        _service = service;
++        _log = log;
++    }
++
++    /// <summary>
++    /// Pede a inscrição. A resposta é sempre a mesma para e-mails novos, pendentes ou já confirmados,
++    /// para não revelar quem está inscrito. Limitado por IP (política "newsletter").
++    /// </summary>
++    [HttpPost("assinar")]
++    [AllowAnonymous]
++    [EnableRateLimiting("newsletter")]
++    public async Task<IActionResult> Assinar(AssinarNewsletterDto dto, CancellationToken ct)
++    {
++        if (!dto.AceiteLgpd)
++        {
++            return BadRequest(new { erro = "É necessário concordar em receber os e-mails para se inscrever." });
++        }
++
++        try
++        {
++            await _service.AssinarAsync(dto.Email, dto.Categorias ?? Array.Empty<int>(), dto.Cidades ?? Array.Empty<string>(), ct);
++        }
++        catch (ArgumentException)
++        {
++            return BadRequest(new { erro = "Informe um e-mail válido." });
++        }
++        catch (Exception ex) when (ex is not OperationCanceledException)
++        {
++            _log.LogError(ex, "Falha ao enviar o e-mail de confirmação da newsletter.");
++            return StatusCode(StatusCodes.Status503ServiceUnavailable,
++                new { erro = "Não foi possível enviar o e-mail agora. Tente novamente em alguns minutos." });
++        }
++
++        return Accepted(new { mensagem = "Enviamos um e-mail com o link para confirmar sua inscrição. Se não encontrar, olhe a caixa de spam." });
++    }
++
++    [HttpPost("confirmar")]
++    [AllowAnonymous]
++    public async Task<IActionResult> Confirmar(TokenNewsletterDto dto) =>
++        await _service.ConfirmarAsync(dto.Token)
++            ? Ok(new { mensagem = "Inscrição confirmada. Você vai receber os novos eventos por e-mail." })
++            : NotFound(new { erro = "Link inválido ou já utilizado." });
++
++    [HttpPost("cancelar")]
++    [AllowAnonymous]
++    public async Task<IActionResult> Cancelar(TokenNewsletterDto dto) =>
++        await _service.CancelarAsync(dto.Token)
++            ? Ok(new { mensagem = "Inscrição cancelada. Seus dados foram removidos." })
++            : NotFound(new { erro = "Link inválido ou inscrição já cancelada." });
++}
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Api/DTOs/NewsletterDtos.cs TechFlowEventos/TechFlow.Eventos.Api/DTOs/NewsletterDtos.cs
+--- /tmp/antes3/TechFlow.Eventos.Api/DTOs/NewsletterDtos.cs	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/DTOs/NewsletterDtos.cs	2026-11-06 01:28:16.374672354 +0000
+@@ -0,0 +1,22 @@
++using System.ComponentModel.DataAnnotations;
++
++namespace TechFlow.Eventos.Api.DTOs;
++
++public class AssinarNewsletterDto
++{
++    [Required, EmailAddress, MaxLength(254)] public string Email { get; set; } = string.Empty;
++
++    /// <summary>Valores de CategoriaEvento. Vazio = todas.</summary>
++    public int[]? Categorias { get; set; }
++
++    /// <summary>Nomes de cidades. Vazio = todas.</summary>
++    public string[]? Cidades { get; set; }
++
++    /// <summary>Aceite do consentimento (LGPD). Obrigatório.</summary>
++    public bool AceiteLgpd { get; set; }
++}
++
++public class TokenNewsletterDto
++{
++    [Required, MaxLength(64)] public string Token { get; set; } = string.Empty;
++}
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Api/Program.cs TechFlowEventos/TechFlow.Eventos.Api/Program.cs
+--- /tmp/antes3/TechFlow.Eventos.Api/Program.cs	2026-11-06 01:27:43.738202254 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/Program.cs	2026-11-06 01:28:16.384979252 +0000
+@@ -1,10 +1,14 @@
+ using System.Text;
++using System.Threading.RateLimiting;
++using Microsoft.AspNetCore.HttpOverrides;
++using Microsoft.AspNetCore.RateLimiting;
+ using Microsoft.AspNetCore.Authentication.JwtBearer;
+ using Microsoft.EntityFrameworkCore;
+ using Microsoft.IdentityModel.Tokens;
+ using Microsoft.OpenApi.Models;
+ using TechFlow.Eventos.Infra;
+ using TechFlow.Eventos.Infra.Data;
++using TechFlow.Eventos.Infra.Newsletter;
+ 
+ var builder = WebApplication.CreateBuilder(args);
+ 
+@@ -33,6 +37,24 @@
+ }
+ 
+ builder.Services.AddInfrastructure(builder.Configuration);
++builder.Services.AddNewsletterModule(builder.Configuration);
++
++// Atrás do proxy do Render, o IP real do visitante vem em X-Forwarded-For (necessário para o limite por IP).
++builder.Services.Configure<ForwardedHeadersOptions>(o =>
++{
++    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
++    o.KnownNetworks.Clear();
++    o.KnownProxies.Clear();
++});
++
++// Limite de pedidos de inscrição na newsletter: 5 por hora por IP.
++builder.Services.AddRateLimiter(o =>
++{
++    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
++    o.AddPolicy("newsletter", ctx => RateLimitPartition.GetFixedWindowLimiter(
++        ctx.Connection.RemoteIpAddress?.ToString() ?? "desconhecido",
++        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromHours(1), QueueLimit = 0 }));
++});
+ 
+ // ---------- JWT ----------
+ var jwt = builder.Configuration.GetSection("Jwt");
+@@ -87,6 +109,7 @@
+ });
+ 
+ var app = builder.Build();
++app.UseForwardedHeaders();
+ 
+ // Porta definida pela plataforma (Render). Localmente vale o launchSettings/ASPNETCORE_URLS.
+ var port = Environment.GetEnvironmentVariable("PORT");
+@@ -113,6 +136,7 @@
+ app.UseDefaultFiles();
+ app.UseStaticFiles();
+ app.UseCors(corsPolicy);
++app.UseRateLimiter();
+ app.UseAuthentication();
+ app.UseAuthorization();
+ app.MapControllers();
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Api/appsettings.Development.json TechFlowEventos/TechFlow.Eventos.Api/appsettings.Development.json
+--- /tmp/antes3/TechFlow.Eventos.Api/appsettings.Development.json	2026-11-06 01:27:43.738166338 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/appsettings.Development.json	2026-11-06 01:28:16.385222820 +0000
+@@ -2,6 +2,7 @@
+   "ConnectionStrings": {
+     "DefaultConnection": "Host=localhost;Port=5432;Database=techflow_eventos;Username=postgres;Password=postgres"
+   },
++  "App": { "BaseUrl": "http://localhost:5000" },
+   "Jwt": { "Key": "chave-somente-para-desenvolvimento-local-troque-em-producao-0123456789" },
+   "Seed": {
+     "AdminNome": "Administrador Local",
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Api/appsettings.json TechFlowEventos/TechFlow.Eventos.Api/appsettings.json
+--- /tmp/antes3/TechFlow.Eventos.Api/appsettings.json	2026-11-06 01:27:43.738137079 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/appsettings.json	2026-11-06 01:28:16.385108215 +0000
+@@ -9,6 +9,8 @@
+     "ExpiresInMinutes": "120"
+   },
+   "Cors": { "AllowedOrigins": [] },
++  "App": { "BaseUrl": "" },
++  "Email": { "RemetenteNome": "TechFlow Eventos", "RemetenteEmail": "", "Brevo": { "ApiKey": "" } },
+   "Seed": { "AdminNome": "Administrador", "AdminEmail": "", "AdminSenha": "", "EventosDemo": "false" },
+   "Swagger": { "Enabled": "false" }
+ }
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Api/wwwroot/css/newsletter.css TechFlowEventos/TechFlow.Eventos.Api/wwwroot/css/newsletter.css
+--- /tmp/antes3/TechFlow.Eventos.Api/wwwroot/css/newsletter.css	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/wwwroot/css/newsletter.css	2026-11-06 01:28:48.392439589 +0000
+@@ -0,0 +1,11 @@
++/* Módulo Newsletter: estilos próprios, sem alterar o styles.css */
++.cta{background:var(--soft);border:1px solid var(--line);border-radius:var(--radius-lg);padding:24px;display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:40px}
++.cta h2{margin:0 0 4px}.cta p{margin:0;color:var(--muted)}
++.opcoes{border:1.5px solid var(--line);border-radius:var(--radius);padding:12px 14px;margin:0 0 16px}
++.opcoes legend{font-weight:700;font-size:.88rem;padding:0 6px}
++.opcoes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px 14px}
++.opcoes label{display:flex;gap:8px;align-items:center;font-weight:500;margin:0}
++.aceite{display:flex;gap:10px;align-items:flex-start;font-size:.9rem;margin:6px 0 16px}
++.aceite input{margin-top:4px}
++.msg-box{border-radius:var(--radius-lg);padding:24px;background:var(--card);border:1px solid var(--line);text-align:center}
++.msg-box.erro{border-color:var(--danger)}
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Api/wwwroot/index.html TechFlowEventos/TechFlow.Eventos.Api/wwwroot/index.html
+--- /tmp/antes3/TechFlow.Eventos.Api/wwwroot/index.html	2026-11-06 01:27:43.737956615 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/wwwroot/index.html	2026-11-06 01:28:48.389320428 +0000
+@@ -7,6 +7,7 @@
+   <link rel="preconnect" href="https://fonts.googleapis.com" />
+   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Figtree:wght@400;500;700&display=swap" />
+   <link rel="stylesheet" href="css/styles.css" />
++  <link rel="stylesheet" href="css/newsletter.css" />
+ </head>
+ <body data-pagina="index.html">
+   <header id="site-header" class="site-header"></header>
+@@ -39,6 +40,14 @@
+         <button type="button" data-dias="29" aria-pressed="false">Mensal</button>
+       </div>
+       <div id="programacao"></div>
++
++      <div class="cta">
++        <div>
++          <h2>Receba eventos no seu e-mail</h2>
++          <p>Escolha as categorias e cidades de interesse e avisamos quando um evento novo for publicado.</p>
++        </div>
++        <a class="btn btn-primary" href="newsletter.html">Quero receber</a>
++      </div>
+     </div>
+   </section>
+ 
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Api/wwwroot/js/newsletter.js TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/newsletter.js
+--- /tmp/antes3/TechFlow.Eventos.Api/wwwroot/js/newsletter.js	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/newsletter.js	2026-11-06 01:28:48.394000758 +0000
+@@ -0,0 +1,87 @@
++/* Newsletter: inscrição, confirmação (?confirmar=token) e cancelamento (?cancelar=token) */
++const el = (id) => document.getElementById(id);
++
++function mostrarMensagem(texto, erro = false) {
++  el("resultado").innerHTML = `<div class="msg-box ${erro ? "erro" : ""}"><p style="margin:0">${escapeHtml(texto)}</p></div>`;
++}
++
++async function confirmar(token) {
++  el("form-newsletter").hidden = true;
++  mostrarMensagem("Confirmando sua inscrição...");
++  try {
++    const r = await Api.confirmarNewsletter(token);
++    mostrarMensagem(r.mensagem);
++  } catch (e) {
++    mostrarMensagem(e.message, true);
++  }
++}
++
++function pedirCancelamento(token) {
++  el("form-newsletter").hidden = true;
++  el("resultado").innerHTML = `
++    <div class="msg-box">
++      <h2>Cancelar inscrição</h2>
++      <p>Você deixará de receber os eventos por e-mail e seus dados serão removidos.</p>
++      <button class="btn btn-primary" id="btn-cancelar" type="button">Confirmar cancelamento</button>
++    </div>`;
++  el("btn-cancelar").addEventListener("click", async () => {
++    el("btn-cancelar").disabled = true;
++    try {
++      mostrarMensagem((await Api.cancelarNewsletter(token)).mensagem);
++    } catch (e) {
++      mostrarMensagem(e.message, true);
++    }
++  });
++}
++
++function marcados(container) {
++  return [...el(container).querySelectorAll("input:checked")].map((i) => i.value);
++}
++
++async function carregarOpcoes() {
++  try {
++    const [cats, cidades] = await Promise.all([Api.listarCategoriasEvento(), Api.listarCidadesEvento()]);
++    el("lista-categorias").innerHTML = cats
++      .map((c) => `<label><input type="checkbox" value="${c.id}" /> ${escapeHtml(c.nome)}</label>`).join("");
++    if (cidades.length) {
++      el("lista-cidades").innerHTML = cidades
++        .map((c) => `<label><input type="checkbox" value="${escapeHtml(c)}" /> ${escapeHtml(c)}</label>`).join("");
++      el("bloco-cidades").hidden = false;
++    }
++  } catch {
++    el("erro").textContent = "Não foi possível carregar as opções. Verifique se a API está no ar.";
++  }
++}
++
++document.addEventListener("DOMContentLoaded", async () => {
++  const q = new URLSearchParams(location.search);
++  if (q.get("confirmar")) return confirmar(q.get("confirmar"));
++  if (q.get("cancelar")) return pedirCancelamento(q.get("cancelar"));
++
++  await carregarOpcoes();
++
++  el("form-newsletter").addEventListener("submit", async (ev) => {
++    ev.preventDefault();
++    const erro = el("erro");
++    erro.textContent = "";
++    const email = el("n-email").value.trim();
++    if (!email) { erro.textContent = "Informe seu e-mail."; return; }
++    if (!el("n-aceite").checked) { erro.textContent = "Marque a caixa de concordância para se inscrever."; return; }
++
++    const botao = el("btn-assinar");
++    botao.disabled = true;
++    try {
++      const r = await Api.assinarNewsletter({
++        email,
++        categorias: marcados("lista-categorias").map(Number),
++        cidades: marcados("lista-cidades"),
++        aceiteLgpd: true,
++      });
++      el("form-newsletter").hidden = true;
++      mostrarMensagem(r.mensagem);
++    } catch (e) {
++      erro.textContent = e.status === 429 ? "Muitos pedidos deste dispositivo. Tente novamente mais tarde." : e.message;
++      botao.disabled = false;
++    }
++  });
++});
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Api/wwwroot/js/shared.js TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/shared.js
+--- /tmp/antes3/TechFlow.Eventos.Api/wwwroot/js/shared.js	2026-11-06 01:27:43.737689561 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/wwwroot/js/shared.js	2026-11-06 01:28:48.388878441 +0000
+@@ -58,6 +58,9 @@
+   listarCidadesEvento: () => apiRequest("/eventos/cidades"),
+   enviarEvento: (dto) => apiRequest("/eventos", { method: "POST", body: dto }),
+   listarEventosPendentes: () => apiRequest("/eventos/pendentes"),
++  assinarNewsletter: (dto) => apiRequest("/newsletter/assinar", { method: "POST", body: dto }),
++  confirmarNewsletter: (token) => apiRequest("/newsletter/confirmar", { method: "POST", body: { token } }),
++  cancelarNewsletter: (token) => apiRequest("/newsletter/cancelar", { method: "POST", body: { token } }),
+   moderarEvento: (id, dto) => apiRequest(`/eventos/${id}/moderar`, { method: "PATCH", body: dto }),
+ 
+   /** Foto de evento ainda não aprovado: só moderadores, então a busca leva o token e devolve uma URL local (blob). */
+@@ -91,6 +94,7 @@
+     { href: "index.html", label: "Início" },
+     { href: "explorar.html", label: "Explorar" },
+     { href: "divulgar.html", label: "Divulgar evento" },
++    { href: "newsletter.html", label: "Newsletter" },
+   ];
+   if (Session.ehModerador()) {
+     paginas.push({ href: "moderar.html", label: "Moderar" }, { href: "qr.html", label: "QR codes" });
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Api/wwwroot/newsletter.html TechFlowEventos/TechFlow.Eventos.Api/wwwroot/newsletter.html
+--- /tmp/antes3/TechFlow.Eventos.Api/wwwroot/newsletter.html	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Api/wwwroot/newsletter.html	2026-11-06 01:28:48.393229237 +0000
+@@ -0,0 +1,56 @@
++<!DOCTYPE html>
++<html lang="pt-br">
++<head>
++  <meta charset="UTF-8" />
++  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++  <title>Newsletter — TechFlow Eventos</title>
++  <link rel="preconnect" href="https://fonts.googleapis.com" />
++  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Figtree:wght@400;500;700&display=swap" />
++  <link rel="stylesheet" href="css/styles.css" />
++  <link rel="stylesheet" href="css/newsletter.css" />
++</head>
++<body data-pagina="newsletter.html">
++  <header id="site-header" class="site-header"></header>
++
++  <div class="page-heading">
++    <h1>Newsletter de eventos</h1>
++    <p class="page-subtitle">Receba por e-mail os eventos novos que combinam com seus interesses.</p>
++  </div>
++
++  <div class="container" style="max-width:720px;padding-bottom:72px">
++    <div id="resultado" role="status" aria-live="polite"></div>
++
++    <form class="form-panel" id="form-newsletter" novalidate>
++      <div class="form-field">
++        <label for="n-email">Seu e-mail *</label>
++        <input type="email" id="n-email" autocomplete="email" maxlength="254" required />
++      </div>
++
++      <fieldset class="opcoes">
++        <legend>Categorias de interesse</legend>
++        <div class="opcoes-grid" id="lista-categorias"></div>
++        <div class="form-hint">Sem marcar nenhuma, você recebe todas as categorias.</div>
++      </fieldset>
++
++      <fieldset class="opcoes" id="bloco-cidades" hidden>
++        <legend>Cidades</legend>
++        <div class="opcoes-grid" id="lista-cidades"></div>
++        <div class="form-hint">Sem marcar nenhuma, você recebe eventos de todas as cidades.</div>
++      </fieldset>
++
++      <label class="aceite">
++        <input type="checkbox" id="n-aceite" />
++        <span>Concordo em receber e-mails da TechFlow Eventos com novos eventos conforme as preferências acima.
++          Uso meu e-mail apenas para isso e posso cancelar a qualquer momento pelo link no final de cada mensagem.</span>
++      </label>
++
++      <p class="erro-form" id="erro" role="alert"></p>
++      <button type="submit" class="btn btn-primary btn-block" id="btn-assinar">Quero receber</button>
++    </form>
++  </div>
++
++  <footer id="site-footer" class="site-footer"></footer>
++  <script src="js/shared.js"></script>
++  <script src="js/newsletter.js"></script>
++</body>
++</html>
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Core/Enums/CategoriaEventoExtensions.cs TechFlowEventos/TechFlow.Eventos.Core/Enums/CategoriaEventoExtensions.cs
+--- /tmp/antes3/TechFlow.Eventos.Core/Enums/CategoriaEventoExtensions.cs	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Core/Enums/CategoriaEventoExtensions.cs	2026-11-06 01:27:43.743553790 +0000
+@@ -0,0 +1,14 @@
++namespace TechFlow.Eventos.Core.Enums;
++
++public static class CategoriaEventoExtensions
++{
++    public static string Nome(this CategoriaEvento c) => c switch
++    {
++        CategoriaEvento.CulturaAfro => "Cultura afro",
++        CategoriaEvento.Musica => "Música",
++        CategoriaEvento.Gastronomia => "Gastronomia",
++        CategoriaEvento.Patrimonio => "Patrimônio",
++        CategoriaEvento.Feira => "Feira",
++        _ => "Outros"
++    };
++}
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Core/Interfaces/IEventoPublicadoHandler.cs TechFlowEventos/TechFlow.Eventos.Core/Interfaces/IEventoPublicadoHandler.cs
+--- /tmp/antes3/TechFlow.Eventos.Core/Interfaces/IEventoPublicadoHandler.cs	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Core/Interfaces/IEventoPublicadoHandler.cs	2026-11-06 01:27:43.740469141 +0000
+@@ -0,0 +1,13 @@
++using TechFlow.Eventos.Core.Models;
++
++namespace TechFlow.Eventos.Core.Interfaces;
++
++/// <summary>
++/// Ponto de extensão do módulo de Eventos: quem quiser reagir à publicação de um evento
++/// (newsletter, notificações push, integrações) implementa esta interface e registra no DI.
++/// O módulo de Eventos não conhece quem escuta.
++/// </summary>
++public interface IEventoPublicadoHandler
++{
++    Task AoPublicarAsync(Evento evento, CancellationToken ct = default);
++}
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Core/Newsletter/Assinante.cs TechFlowEventos/TechFlow.Eventos.Core/Newsletter/Assinante.cs
+--- /tmp/antes3/TechFlow.Eventos.Core/Newsletter/Assinante.cs	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Core/Newsletter/Assinante.cs	2026-11-06 01:27:43.741501640 +0000
+@@ -0,0 +1,57 @@
++using TechFlow.Eventos.Core.Models;
++
++namespace TechFlow.Eventos.Core.Newsletter;
++
++/// <summary>Pessoa inscrita na newsletter, com as preferências de categoria e cidade.</summary>
++public class Assinante
++{
++    public int Id { get; set; }
++    public string Email { get; set; } = string.Empty;
++
++    /// <summary>Valores de CategoriaEvento. Vazio significa "todas as categorias".</summary>
++    public int[] Categorias { get; set; } = Array.Empty<int>();
++
++    /// <summary>Vazio significa "todas as cidades".</summary>
++    public string[] Cidades { get; set; } = Array.Empty<string>();
++
++    /// <summary>Token aleatório usado nos links de confirmação e de cancelamento enviados por e-mail.</summary>
++    public string Token { get; set; } = string.Empty;
++
++    /// <summary>Só assinantes confirmados (double opt-in) recebem eventos.</summary>
++    public bool Confirmado { get; set; }
++
++    public DateTime DataCadastro { get; set; } = DateTime.UtcNow;
++
++    /// <summary>Quando a pessoa marcou o aceite (LGPD) no formulário.</summary>
++    public DateTime? DataAceite { get; set; }
++    public DateTime? ConfirmacaoEnviadaEm { get; set; }
++    public DateTime? DataConfirmacao { get; set; }
++
++    public bool QuerReceber(Evento e) =>
++        Confirmado
++        && (Categorias.Length == 0 || Categorias.Contains((int)e.Categoria))
++        && (Cidades.Length == 0 || Cidades.Contains(e.Cidade, StringComparer.OrdinalIgnoreCase));
++}
++
++/// <summary>Registro de que o evento já foi enviado a um assinante (impede e-mail duplicado).</summary>
++public class EnvioNewsletter
++{
++    public int Id { get; set; }
++    public int EventoId { get; set; }
++    public int AssinanteId { get; set; }
++    public DateTime EnviadoEm { get; set; } = DateTime.UtcNow;
++}
++
++public record EmailMensagem(string Para, string Assunto, string Html, string Texto);
++
++public record ResultadoEnvio(int Destinatarios, int Enviados, int Falhas, string? UltimoErro);
++
++public class NewsletterOptions
++{
++    /// <summary>Endereço público do site (ex.: https://meusite.onrender.com), usado nos links dos e-mails.</summary>
++    public string BaseUrl { get; set; } = string.Empty;
++    public string NomeRemetente { get; set; } = "TechFlow Eventos";
++    public string EmailRemetente { get; set; } = string.Empty;
++
++    public string BaseUrlLimpa => BaseUrl.TrimEnd('/');
++}
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Core/Newsletter/EmailTemplates.cs TechFlowEventos/TechFlow.Eventos.Core/Newsletter/EmailTemplates.cs
+--- /tmp/antes3/TechFlow.Eventos.Core/Newsletter/EmailTemplates.cs	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Core/Newsletter/EmailTemplates.cs	2026-11-06 01:28:16.370446731 +0000
+@@ -0,0 +1,67 @@
++using System.Globalization;
++using System.Net;
++using TechFlow.Eventos.Core.Enums;
++using TechFlow.Eventos.Core.Models;
++
++namespace TechFlow.Eventos.Core.Newsletter;
++
++/// <summary>Textos e HTML dos e-mails. HTML simples com estilos inline (compatível com clientes de e-mail).</summary>
++public static class EmailTemplates
++{
++    private static readonly string[] Dias = { "domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado" };
++    private static readonly string[] Meses = { "janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro" };
++
++    public static EmailMensagem Confirmacao(NewsletterOptions o, Assinante a)
++    {
++        var link = $"{o.BaseUrlLimpa}/newsletter.html?confirmar={a.Token}";
++        var html = Layout(o, "Confirme sua inscrição",
++            $"<p>Recebemos um pedido para enviar a você, por e-mail, os novos eventos da agenda cultural conforme suas preferências.</p>" +
++            $"<p>{Botao(link, "Confirmar inscrição")}</p>" +
++            "<p style=\"color:#586654;font-size:14px\">Se não foi você, ignore esta mensagem: nada será enviado sem a confirmação.</p>");
++        var texto = $"Confirme sua inscrição na newsletter do {o.NomeRemetente}: {link}\nSe não foi você, ignore esta mensagem.";
++        return new EmailMensagem(a.Email, "Confirme sua inscrição na newsletter de eventos", html, texto);
++    }
++
++    public static EmailMensagem NovoEvento(NewsletterOptions o, Assinante a, Evento e)
++    {
++        var detalhe = $"{o.BaseUrlLimpa}/evento.html?id={e.Id}";
++        var cancelar = $"{o.BaseUrlLimpa}/newsletter.html?cancelar={a.Token}";
++        var hora = e.Horario.ToString("HH:mm", CultureInfo.InvariantCulture);
++        var quando = $"{Dia(e.Data)}, às {hora}";
++        var local = $"{e.Endereco}, {e.Cidade}";
++        var preco = e.Gratuito ? "Gratuito" : "R$ " + e.Preco.ToString("0.00", CultureInfo.InvariantCulture).Replace('.', ',');
++
++        var foto = e.TemFoto
++            ? $"<img src=\"{o.BaseUrlLimpa}/api/eventos/{e.Id}/foto\" alt=\"Foto do evento\" style=\"max-width:100%;height:auto;border-radius:8px;margin:0 0 16px\" />"
++            : string.Empty;
++
++        var corpo =
++            foto +
++            $"<h2 style=\"margin:0 0 8px;font-size:22px\">{H(e.Titulo)}</h2>" +
++            $"<p style=\"margin:0 0 12px;color:#586654\">{H(e.Categoria.Nome())}</p>" +
++            $"<p style=\"margin:0 0 4px\"><strong>Quando:</strong> {H(quando)}</p>" +
++            $"<p style=\"margin:0 0 4px\"><strong>Onde:</strong> {H(local)}</p>" +
++            $"<p style=\"margin:0 0 16px\"><strong>Preço:</strong> {H(preco)}</p>" +
++            $"<p>{Botao(detalhe, "Ver detalhes do evento")}</p>" +
++            $"<p style=\"color:#586654;font-size:13px;margin-top:28px\">Você recebe este e-mail porque se inscreveu na newsletter de eventos com estas preferências. " +
++            $"<a href=\"{cancelar}\" style=\"color:#586654\">Cancelar inscrição</a></p>";
++
++        var texto = $"{e.Titulo}\n{e.Categoria.Nome()}\nQuando: {quando}\nOnde: {local}\nPreço: {preco}\nDetalhes: {detalhe}\n\nCancelar inscrição: {cancelar}";
++        return new EmailMensagem(a.Email, $"Novo evento: {e.Titulo} ({e.Data:dd/MM})", Layout(o, null, corpo), texto);
++    }
++
++    private static string Layout(NewsletterOptions o, string? titulo, string conteudo) =>
++        "<!DOCTYPE html><html lang=\"pt-br\"><body style=\"margin:0;background:#f3f6f1;font-family:Arial,Helvetica,sans-serif;color:#1d2a1a\">" +
++        "<div style=\"max-width:560px;margin:0 auto;padding:24px 16px\">" +
++        $"<p style=\"font-size:20px;font-weight:bold;margin:0 0 16px\"><span style=\"color:#DA7E42\">TECH</span><span style=\"color:#309CC9\">FLOW</span> Eventos</p>" +
++        "<div style=\"background:#ffffff;border-radius:12px;padding:24px;line-height:1.5\">" +
++        (titulo is null ? string.Empty : $"<h2 style=\"margin:0 0 12px\">{H(titulo)}</h2>") +
++        conteudo + "</div></div></body></html>";
++
++    private static string Botao(string url, string texto) =>
++        $"<a href=\"{url}\" style=\"display:inline-block;background:#3D5C30;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:bold\">{H(texto)}</a>";
++
++    private static string Dia(DateOnly d) => $"{Dias[(int)d.DayOfWeek]}, {d.Day:00} de {Meses[d.Month - 1]}";
++
++    private static string H(string s) => WebUtility.HtmlEncode(s);
++}
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Core/Newsletter/Interfaces.cs TechFlowEventos/TechFlow.Eventos.Core/Newsletter/Interfaces.cs
+--- /tmp/antes3/TechFlow.Eventos.Core/Newsletter/Interfaces.cs	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Core/Newsletter/Interfaces.cs	2026-11-06 01:27:43.742158879 +0000
+@@ -0,0 +1,25 @@
++namespace TechFlow.Eventos.Core.Newsletter;
++
++public interface IAssinanteRepository
++{
++    Task<Assinante?> ObterPorEmailAsync(string email);
++    Task<Assinante?> ObterPorTokenAsync(string token);
++    Task<IReadOnlyList<Assinante>> ListarConfirmadosAsync();
++    Task<HashSet<int>> ListarIdsJaNotificadosAsync(int eventoId);
++    Task AdicionarAsync(Assinante assinante);
++    void Remover(Assinante assinante);
++    Task RegistrarEnvioAsync(int eventoId, int assinanteId);
++    Task SalvarAlteracoesAsync();
++}
++
++/// <summary>Envio de e-mail. Implementações: Brevo (API HTTP) e log (desenvolvimento).</summary>
++public interface IEmailSender
++{
++    Task EnviarAsync(EmailMensagem mensagem, CancellationToken ct = default);
++}
++
++/// <summary>Fila interna: o módulo de Eventos não espera o envio dos e-mails terminar.</summary>
++public interface INewsletterDispatcher
++{
++    void EnfileirarEvento(int eventoId);
++}
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Core/Newsletter/NewsletterService.cs TechFlowEventos/TechFlow.Eventos.Core/Newsletter/NewsletterService.cs
+--- /tmp/antes3/TechFlow.Eventos.Core/Newsletter/NewsletterService.cs	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Core/Newsletter/NewsletterService.cs	2026-11-06 01:27:43.744325097 +0000
+@@ -0,0 +1,134 @@
++using System.Net.Mail;
++using System.Security.Cryptography;
++using TechFlow.Eventos.Core.Enums;
++using TechFlow.Eventos.Core.Interfaces;
++using TechFlow.Eventos.Core.Models;
++
++namespace TechFlow.Eventos.Core.Newsletter;
++
++/// <summary>Regras do módulo Newsletter: inscrição com confirmação, cancelamento e envio por preferência.</summary>
++public class NewsletterService
++{
++    private static readonly TimeSpan IntervaloReenvio = TimeSpan.FromMinutes(10);
++
++    private readonly IAssinanteRepository _assinantes;
++    private readonly IEventoRepository _eventos;
++    private readonly IEmailSender _email;
++    private readonly NewsletterOptions _options;
++
++    public NewsletterService(IAssinanteRepository assinantes, IEventoRepository eventos, IEmailSender email, NewsletterOptions options)
++    {
++        _assinantes = assinantes;
++        _eventos = eventos;
++        _email = email;
++        _options = options;
++    }
++
++    /// <summary>
++    /// Cria (ou atualiza, se ainda não confirmado) a inscrição e envia o e-mail de confirmação.
++    /// Quem já está confirmado não recebe nada: evita usar o formulário para disparar e-mails a terceiros.
++    /// </summary>
++    public async Task AssinarAsync(string email, IEnumerable<int> categorias, IEnumerable<string> cidades, CancellationToken ct = default)
++    {
++        var endereco = NormalizarEmail(email) ?? throw new ArgumentException("E-mail inválido.");
++        var cats = categorias.Distinct().Where(c => Enum.IsDefined(typeof(CategoriaEvento), c)).OrderBy(c => c).ToArray();
++        var cids = cidades.Select(c => c.Trim()).Where(c => c.Length is > 0 and <= 120)
++                          .Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToArray();
++
++        var assinante = await _assinantes.ObterPorEmailAsync(endereco);
++        if (assinante is { Confirmado: true }) return;
++
++        var agora = DateTime.UtcNow;
++        if (assinante is null)
++        {
++            assinante = new Assinante
++            {
++                Email = endereco, Categorias = cats, Cidades = cids,
++                Token = NovoToken(), DataAceite = agora
++            };
++            await _assinantes.AdicionarAsync(assinante);
++        }
++        else
++        {
++            if (assinante.ConfirmacaoEnviadaEm is { } ultimo && agora - ultimo < IntervaloReenvio) return;
++            assinante.Categorias = cats;
++            assinante.Cidades = cids;
++            assinante.DataAceite = agora;
++        }
++
++        await _assinantes.SalvarAlteracoesAsync();
++        await _email.EnviarAsync(EmailTemplates.Confirmacao(_options, assinante), ct);
++        assinante.ConfirmacaoEnviadaEm = DateTime.UtcNow;
++        await _assinantes.SalvarAlteracoesAsync();
++    }
++
++    public async Task<bool> ConfirmarAsync(string token)
++    {
++        var assinante = await _assinantes.ObterPorTokenAsync(token);
++        if (assinante is null) return false;
++
++        if (!assinante.Confirmado)
++        {
++            assinante.Confirmado = true;
++            assinante.DataConfirmacao = DateTime.UtcNow;
++            await _assinantes.SalvarAlteracoesAsync();
++        }
++
++        return true;
++    }
++
++    /// <summary>Descadastro: remove o assinante e o histórico de envios (os dados deixam de existir).</summary>
++    public async Task<bool> CancelarAsync(string token)
++    {
++        var assinante = await _assinantes.ObterPorTokenAsync(token);
++        if (assinante is null) return false;
++
++        _assinantes.Remover(assinante);
++        await _assinantes.SalvarAlteracoesAsync();
++        return true;
++    }
++
++    /// <summary>Envia o evento aprovado aos assinantes confirmados cujas preferências combinam. Idempotente por assinante.</summary>
++    public async Task<ResultadoEnvio> NotificarEventoAsync(int eventoId, CancellationToken ct = default)
++    {
++        var evento = await _eventos.ObterPorIdAsync(eventoId);
++        if (evento is null || evento.Status != StatusEvento.Aprovado || evento.Data < Evento.HojeBrasil())
++        {
++            return new ResultadoEnvio(0, 0, 0, null);
++        }
++
++        var jaEnviados = await _assinantes.ListarIdsJaNotificadosAsync(eventoId);
++        var destinatarios = (await _assinantes.ListarConfirmadosAsync())
++            .Where(a => a.QuerReceber(evento) && !jaEnviados.Contains(a.Id))
++            .ToList();
++
++        int enviados = 0, falhas = 0;
++        string? ultimoErro = null;
++        foreach (var assinante in destinatarios)
++        {
++            ct.ThrowIfCancellationRequested();
++            try
++            {
++                await _email.EnviarAsync(EmailTemplates.NovoEvento(_options, assinante, evento), ct);
++                await _assinantes.RegistrarEnvioAsync(eventoId, assinante.Id);
++                enviados++;
++            }
++            catch (Exception ex) when (ex is not OperationCanceledException)
++            {
++                falhas++;
++                ultimoErro = ex.Message;
++            }
++        }
++
++        return new ResultadoEnvio(destinatarios.Count, enviados, falhas, ultimoErro);
++    }
++
++    private static string? NormalizarEmail(string? email)
++    {
++        var e = email?.Trim().ToLowerInvariant();
++        if (string.IsNullOrEmpty(e) || e.Length > 254) return null;
++        return MailAddress.TryCreate(e, out var m) && m.Address == e && e.Contains('.', StringComparison.Ordinal) ? e : null;
++    }
++
++    private static string NovoToken() => Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant();
++}
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Infra/Data/AppDbContext.cs TechFlowEventos/TechFlow.Eventos.Infra/Data/AppDbContext.cs
+--- /tmp/antes3/TechFlow.Eventos.Infra/Data/AppDbContext.cs	2026-11-06 01:27:43.736671937 +0000
++++ TechFlowEventos/TechFlow.Eventos.Infra/Data/AppDbContext.cs	2026-11-06 01:27:43.774548489 +0000
+@@ -1,6 +1,8 @@
+ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+ using Microsoft.EntityFrameworkCore;
+ using TechFlow.Eventos.Core.Models;
++using TechFlow.Eventos.Core.Newsletter;
++using TechFlow.Eventos.Infra.Newsletter;
+ 
+ namespace TechFlow.Eventos.Infra.Data;
+ 
+@@ -12,6 +14,8 @@
+ 
+     public DbSet<Evento> Eventos => Set<Evento>();
+     public DbSet<EventoFoto> Fotos => Set<EventoFoto>();
++    public DbSet<Assinante> Assinantes => Set<Assinante>();
++    public DbSet<EnvioNewsletter> EnviosNewsletter => Set<EnvioNewsletter>();
+ 
+     protected override void OnModelCreating(ModelBuilder builder)
+     {
+@@ -43,5 +47,7 @@
+             f.Property(x => x.Dados).IsRequired();
+             f.Property(x => x.ContentType).HasMaxLength(50).IsRequired();
+         });
++
++        NewsletterModelConfig.Aplicar(builder);
+     }
+ }
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Infra/Newsletter/AssinanteRepository.cs TechFlowEventos/TechFlow.Eventos.Infra/Newsletter/AssinanteRepository.cs
+--- /tmp/antes3/TechFlow.Eventos.Infra/Newsletter/AssinanteRepository.cs	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Infra/Newsletter/AssinanteRepository.cs	2026-11-06 01:27:43.745640381 +0000
+@@ -0,0 +1,34 @@
++using Microsoft.EntityFrameworkCore;
++using TechFlow.Eventos.Core.Newsletter;
++using TechFlow.Eventos.Infra.Data;
++
++namespace TechFlow.Eventos.Infra.Newsletter;
++
++public class AssinanteRepository : IAssinanteRepository
++{
++    private readonly AppDbContext _db;
++
++    public AssinanteRepository(AppDbContext db) => _db = db;
++
++    public Task<Assinante?> ObterPorEmailAsync(string email) => _db.Assinantes.FirstOrDefaultAsync(a => a.Email == email);
++
++    public Task<Assinante?> ObterPorTokenAsync(string token) => _db.Assinantes.FirstOrDefaultAsync(a => a.Token == token);
++
++    public async Task<IReadOnlyList<Assinante>> ListarConfirmadosAsync() =>
++        await _db.Assinantes.AsNoTracking().Where(a => a.Confirmado).ToListAsync();
++
++    public async Task<HashSet<int>> ListarIdsJaNotificadosAsync(int eventoId) =>
++        (await _db.EnviosNewsletter.Where(x => x.EventoId == eventoId).Select(x => x.AssinanteId).ToListAsync()).ToHashSet();
++
++    public async Task AdicionarAsync(Assinante assinante) => await _db.Assinantes.AddAsync(assinante);
++
++    public void Remover(Assinante assinante) => _db.Assinantes.Remove(assinante);
++
++    public async Task RegistrarEnvioAsync(int eventoId, int assinanteId)
++    {
++        _db.EnviosNewsletter.Add(new EnvioNewsletter { EventoId = eventoId, AssinanteId = assinanteId });
++        await _db.SaveChangesAsync();
++    }
++
++    public Task SalvarAlteracoesAsync() => _db.SaveChangesAsync();
++}
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Infra/Newsletter/EmailSenders.cs TechFlowEventos/TechFlow.Eventos.Infra/Newsletter/EmailSenders.cs
+--- /tmp/antes3/TechFlow.Eventos.Infra/Newsletter/EmailSenders.cs	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Infra/Newsletter/EmailSenders.cs	2026-11-06 01:27:43.746255819 +0000
+@@ -0,0 +1,63 @@
++using System.Net.Http.Json;
++using Microsoft.Extensions.Configuration;
++using Microsoft.Extensions.Logging;
++using TechFlow.Eventos.Core.Newsletter;
++
++namespace TechFlow.Eventos.Infra.Newsletter;
++
++/// <summary>
++/// Envio pela API HTTP do Brevo (https://developers.brevo.com). Usa HTTPS (porta 443), então funciona
++/// no Render, que bloqueia SMTP (25, 465 e 587) nos serviços gratuitos. O remetente precisa estar verificado no Brevo.
++/// </summary>
++public class BrevoEmailSender : IEmailSender
++{
++    private readonly HttpClient _http;
++    private readonly NewsletterOptions _options;
++    private readonly string _apiKey;
++
++    public BrevoEmailSender(HttpClient http, NewsletterOptions options, IConfiguration configuration)
++    {
++        _http = http;
++        _options = options;
++        _apiKey = configuration["Email:Brevo:ApiKey"] ?? string.Empty;
++    }
++
++    public async Task EnviarAsync(EmailMensagem m, CancellationToken ct = default)
++    {
++        var payload = new
++        {
++            sender = new { name = _options.NomeRemetente, email = _options.EmailRemetente },
++            to = new[] { new { email = m.Para } },
++            subject = m.Assunto,
++            htmlContent = m.Html,
++            textContent = m.Texto
++        };
++
++        using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.brevo.com/v3/smtp/email")
++        {
++            Content = JsonContent.Create(payload)
++        };
++        req.Headers.Add("api-key", _apiKey);
++
++        using var resp = await _http.SendAsync(req, ct);
++        if (!resp.IsSuccessStatusCode)
++        {
++            var corpo = await resp.Content.ReadAsStringAsync(ct);
++            throw new InvalidOperationException($"Brevo respondeu {(int)resp.StatusCode}: {(corpo.Length > 300 ? corpo[..300] : corpo)}");
++        }
++    }
++}
++
++/// <summary>Sem provedor configurado, o e-mail é apenas registrado no log (útil em desenvolvimento: os links aparecem no console).</summary>
++public class LogEmailSender : IEmailSender
++{
++    private readonly ILogger<LogEmailSender> _log;
++
++    public LogEmailSender(ILogger<LogEmailSender> log) => _log = log;
++
++    public Task EnviarAsync(EmailMensagem m, CancellationToken ct = default)
++    {
++        _log.LogWarning("E-mail NÃO enviado (provedor não configurado). Para: {Para} | Assunto: {Assunto}\n{Texto}", m.Para, m.Assunto, m.Texto);
++        return Task.CompletedTask;
++    }
++}
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Infra/Newsletter/NewsletterModelConfig.cs TechFlowEventos/TechFlow.Eventos.Infra/Newsletter/NewsletterModelConfig.cs
+--- /tmp/antes3/TechFlow.Eventos.Infra/Newsletter/NewsletterModelConfig.cs	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Infra/Newsletter/NewsletterModelConfig.cs	2026-11-06 01:27:43.744979622 +0000
+@@ -0,0 +1,27 @@
++using Microsoft.EntityFrameworkCore;
++using TechFlow.Eventos.Core.Models;
++using TechFlow.Eventos.Core.Newsletter;
++
++namespace TechFlow.Eventos.Infra.Newsletter;
++
++/// <summary>Mapeamento das tabelas do módulo, chamado de uma linha no AppDbContext.</summary>
++public static class NewsletterModelConfig
++{
++    public static void Aplicar(ModelBuilder b)
++    {
++        b.Entity<Assinante>(a =>
++        {
++            a.Property(x => x.Email).HasMaxLength(254).IsRequired();
++            a.HasIndex(x => x.Email).IsUnique();
++            a.Property(x => x.Token).HasMaxLength(64).IsRequired();
++            a.HasIndex(x => x.Token).IsUnique();
++        });
++
++        b.Entity<EnvioNewsletter>(e =>
++        {
++            e.HasOne<Assinante>().WithMany().HasForeignKey(x => x.AssinanteId).OnDelete(DeleteBehavior.Cascade);
++            e.HasOne<Evento>().WithMany().HasForeignKey(x => x.EventoId).OnDelete(DeleteBehavior.Cascade);
++            e.HasIndex(x => new { x.EventoId, x.AssinanteId }).IsUnique();
++        });
++    }
++}
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Infra/Newsletter/NewsletterModule.cs TechFlowEventos/TechFlow.Eventos.Infra/Newsletter/NewsletterModule.cs
+--- /tmp/antes3/TechFlow.Eventos.Infra/Newsletter/NewsletterModule.cs	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Infra/Newsletter/NewsletterModule.cs	2026-11-06 01:27:43.748203653 +0000
+@@ -0,0 +1,43 @@
++using Microsoft.Extensions.Configuration;
++using Microsoft.Extensions.DependencyInjection;
++using TechFlow.Eventos.Core.Interfaces;
++using TechFlow.Eventos.Core.Newsletter;
++
++namespace TechFlow.Eventos.Infra.Newsletter;
++
++public static class NewsletterModule
++{
++    /// <summary>
++    /// Registra o módulo Newsletter. Configuração: App:BaseUrl, Email:RemetenteNome, Email:RemetenteEmail e Email:Brevo:ApiKey.
++    /// Sem ApiKey e remetente, usa o LogEmailSender (nada é enviado de verdade).
++    /// </summary>
++    public static IServiceCollection AddNewsletterModule(this IServiceCollection services, IConfiguration config)
++    {
++        var options = new NewsletterOptions
++        {
++            BaseUrl = config["App:BaseUrl"] ?? string.Empty,
++            NomeRemetente = config["Email:RemetenteNome"] ?? "TechFlow Eventos",
++            EmailRemetente = config["Email:RemetenteEmail"] ?? string.Empty
++        };
++        services.AddSingleton(options);
++
++        services.AddScoped<IAssinanteRepository, AssinanteRepository>();
++        services.AddScoped<NewsletterService>();
++
++        services.AddSingleton<NewsletterQueue>();
++        services.AddSingleton<INewsletterDispatcher>(sp => sp.GetRequiredService<NewsletterQueue>());
++        services.AddHostedService<NewsletterWorker>();
++        services.AddScoped<IEventoPublicadoHandler, NewsletterEventoPublicadoHandler>();
++
++        if (!string.IsNullOrWhiteSpace(config["Email:Brevo:ApiKey"]) && !string.IsNullOrWhiteSpace(options.EmailRemetente))
++        {
++            services.AddHttpClient<IEmailSender, BrevoEmailSender>(c => c.Timeout = TimeSpan.FromSeconds(15));
++        }
++        else
++        {
++            services.AddSingleton<IEmailSender, LogEmailSender>();
++        }
++
++        return services;
++    }
++}
+diff -ruN -x bin -x obj /tmp/antes3/TechFlow.Eventos.Infra/Newsletter/NewsletterWorker.cs TechFlowEventos/TechFlow.Eventos.Infra/Newsletter/NewsletterWorker.cs
+--- /tmp/antes3/TechFlow.Eventos.Infra/Newsletter/NewsletterWorker.cs	1970-01-01 00:00:00.000000000 +0000
++++ TechFlowEventos/TechFlow.Eventos.Infra/Newsletter/NewsletterWorker.cs	2026-11-06 01:27:43.746895630 +0000
+@@ -0,0 +1,74 @@
++using System.Threading.Channels;
++using Microsoft.Extensions.DependencyInjection;
++using Microsoft.Extensions.Hosting;
++using Microsoft.Extensions.Logging;
++using TechFlow.Eventos.Core.Interfaces;
++using TechFlow.Eventos.Core.Models;
++using TechFlow.Eventos.Core.Newsletter;
++
++namespace TechFlow.Eventos.Infra.Newsletter;
++
++/// <summary>Fila em memória de eventos a notificar. Se a aplicação reiniciar com itens na fila, eles se perdem (limitação do MVP).</summary>
++public sealed class NewsletterQueue : INewsletterDispatcher
++{
++    private readonly Channel<int> _canal = Channel.CreateUnbounded<int>();
++
++    public void EnfileirarEvento(int eventoId) => _canal.Writer.TryWrite(eventoId);
++
++    public IAsyncEnumerable<int> LerAsync(CancellationToken ct) => _canal.Reader.ReadAllAsync(ct);
++}
++
++/// <summary>Processa a fila em segundo plano, fora da requisição de moderação.</summary>
++public class NewsletterWorker : BackgroundService
++{
++    private readonly NewsletterQueue _fila;
++    private readonly IServiceScopeFactory _scopes;
++    private readonly ILogger<NewsletterWorker> _log;
++
++    public NewsletterWorker(NewsletterQueue fila, IServiceScopeFactory scopes, ILogger<NewsletterWorker> log)
++    {
++        _fila = fila;
++        _scopes = scopes;
++        _log = log;
++    }
++
++    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
++    {
++        try
++        {
++            await foreach (var eventoId in _fila.LerAsync(stoppingToken))
++            {
++                try
++                {
++                    using var scope = _scopes.CreateScope();
++                    var servico = scope.ServiceProvider.GetRequiredService<NewsletterService>();
++                    var r = await servico.NotificarEventoAsync(eventoId, stoppingToken);
++                    _log.LogInformation("Newsletter do evento {Id}: {Enviados}/{Destinatarios} enviados, {Falhas} falhas. {Erro}",
++                        eventoId, r.Enviados, r.Destinatarios, r.Falhas, r.UltimoErro);
++                }
++                catch (Exception ex) when (ex is not OperationCanceledException)
++                {
++                    _log.LogError(ex, "Falha ao processar a newsletter do evento {Id}.", eventoId);
++                }
++            }
++        }
++        catch (OperationCanceledException)
++        {
++            // desligamento da aplicação
++        }
++    }
++}
++
++/// <summary>Liga o módulo de Eventos ao de Newsletter: ao aprovar um evento, ele entra na fila.</summary>
++public class NewsletterEventoPublicadoHandler : IEventoPublicadoHandler
++{
++    private readonly INewsletterDispatcher _dispatcher;
++
++    public NewsletterEventoPublicadoHandler(INewsletterDispatcher dispatcher) => _dispatcher = dispatcher;
++
++    public Task AoPublicarAsync(Evento evento, CancellationToken ct = default)
++    {
++        _dispatcher.EnfileirarEvento(evento.Id);
++        return Task.CompletedTask;
++    }
++}
+diff -ruN -x bin -x obj /tmp/antes3/docker-compose.yml TechFlowEventos/docker-compose.yml
+--- /tmp/antes3/docker-compose.yml	2026-11-06 01:27:43.738322581 +0000
++++ TechFlowEventos/docker-compose.yml	2026-11-06 01:28:48.703077281 +0000
+@@ -18,5 +18,8 @@
+       Seed__AdminEmail: ${SEED_ADMIN_EMAIL:?defina no .env}
+       Seed__AdminSenha: ${SEED_ADMIN_SENHA:?defina no .env}
+       Seed__EventosDemo: "true"
++      App__BaseUrl: ${APP_BASE_URL:-http://localhost:8080}
++      Email__Brevo__ApiKey: ${BREVO_API_KEY:-}
++      Email__RemetenteEmail: ${EMAIL_REMETENTE:-}
+ volumes:
+   dbdata:

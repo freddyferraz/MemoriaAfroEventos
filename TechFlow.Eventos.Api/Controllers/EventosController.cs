@@ -19,11 +19,13 @@ public class EventosController : ControllerBase
 
     private readonly IEventoRepository _repository;
     private readonly IGeoLinkService _geo;
+    private readonly IEnumerable<IEventoPublicadoHandler> _aoPublicar;
 
-    public EventosController(IEventoRepository repository, IGeoLinkService geo)
+    public EventosController(IEventoRepository repository, IGeoLinkService geo, IEnumerable<IEventoPublicadoHandler> aoPublicar)
     {
         _repository = repository;
         _geo = geo;
+        _aoPublicar = aoPublicar;
     }
 
     /// <summary>Explorar eventos: só aprovados, de hoje em diante, com os filtros do MVP.</summary>
@@ -172,14 +174,22 @@ public class EventosController : ControllerBase
     /// <summary>Aprova ou rejeita um evento (e define se vai para os destaques). Restrito a Admin/Moderador.</summary>
     [HttpPatch("{id:int}/moderar")]
     [Authorize(Roles = Moderadores)]
-    public async Task<IActionResult> Moderar(int id, EventoModerarDto dto)
+    public async Task<IActionResult> Moderar(int id, EventoModerarDto dto, CancellationToken ct)
     {
         var evento = await _repository.ObterPorIdAsync(id);
         if (evento is null) return NotFound();
 
+        var jaEstavaAprovado = evento.Status == StatusEvento.Aprovado;
         evento.Status = dto.NovoStatus;
         evento.Destaque = dto.NovoStatus == StatusEvento.Aprovado && dto.Destaque;
         await _repository.SalvarAlteracoesAsync();
+
+        // Outros módulos (ex.: newsletter) reagem à publicação sem que este controller os conheça.
+        if (!jaEstavaAprovado && evento.Status == StatusEvento.Aprovado)
+        {
+            foreach (var handler in _aoPublicar) await handler.AoPublicarAsync(evento, ct);
+        }
+
         return NoContent();
     }
 
