@@ -35,6 +35,7 @@ const EventosUI = {
           ${e.temFoto ? `<img class="ev-mini" src="${this.fotoUrl(e.id)}" alt="Foto do evento ${escapeHtml(e.titulo)}" loading="lazy" />` : ""}
           <div class="ev-texto">
             <h3>${escapeHtml(e.titulo)}</h3>
+            ${e.destaque ? '<span class="tag destaque">Destaque</span>' : ""}
             <span class="tag">${escapeHtml(e.categoriaNome)}</span>
             <span class="tag ${e.gratuito ? "gratis" : ""}">${this.preco(e)}</span>
             <p class="ev-meta">${this.hora(e.horario)}, ${escapeHtml(e.cidade)}${dist}<span class="nota" data-nota="${e.id}"></span></p>

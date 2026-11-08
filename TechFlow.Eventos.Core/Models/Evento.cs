@@ -39,6 +39,9 @@ public class Evento
 
     /// <summary>Definido pelo moderador; aparece em "Em destaque" na página inicial.</summary>
     public bool Destaque { get; set; }
+
+    /// <summary>O organizador pediu destaque usando a cota do seu plano. Se aprovado, o evento sai em destaque; se rejeitado, a cota é devolvida.</summary>
+    public bool DestaqueSolicitado { get; set; }
     public StatusEvento Status { get; set; } = StatusEvento.Pendente;
     public DateTime DataEnvio { get; set; } = DateTime.UtcNow;
 

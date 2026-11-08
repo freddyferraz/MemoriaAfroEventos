@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anunciar produto — Conecta Cultura</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Figtree:wght@400;500;700&display=swap" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/newsletter.css" />
+  <link rel="stylesheet" href="css/modulos.css" />
+  <link rel="stylesheet" href="css/loja.css" />
+</head>
+<body data-pagina="loja.html">
+  <header id="site-header" class="site-header"></header>
+  <div class="page-heading">
+    <h1>Anunciar produto</h1>
+    <p class="page-subtitle">Para artistas, artesãos, produtores e empreendedores locais. É preciso ter conta, e todo anúncio é analisado por um moderador antes de aparecer na loja.</p>
+  </div>
+  <div class="container" style="max-width:760px;padding-bottom:72px">
+    <div id="aviso-login"></div>
+    <div class="form-panel" id="painel" hidden>
+      <form id="form-produto" novalidate>
+        <div class="form-grid">
+          <div class="form-field cheio"><label for="p-titulo">Nome do produto *</label><input type="text" id="p-titulo" maxlength="120" /></div>
+          <div class="form-field"><label for="p-categoria">Categoria *</label><select id="p-categoria"></select></div>
+          <div class="form-field"><label for="p-cidade">Cidade *</label><input type="text" id="p-cidade" maxlength="120" list="lista-cidades" /><datalist id="lista-cidades"></datalist></div>
+          <div class="form-field"><label for="p-preco">Preço (R$) *</label><input type="number" id="p-preco" min="1" step="0.01" /></div>
+          <div class="form-field"><label for="p-estoque">Quantidade em estoque *</label><input type="number" id="p-estoque" min="1" max="10000" value="1" /></div>
+          <div class="form-field cheio"><label for="p-descricao">Descrição</label><textarea id="p-descricao" maxlength="2000" rows="4"></textarea></div>
+          <div class="form-field cheio"><label for="p-foto">Foto (opcional)</label><input type="file" id="p-foto" accept="image/jpeg,image/png,image/webp" />
+            <div class="form-hint">JPEG, PNG ou WebP. A imagem é reduzida automaticamente antes do envio.</div>
+            <img id="foto-previa" class="foto-previa" alt="Prévia da foto escolhida" hidden /></div>
+        </div>
+        <p class="erro-form" id="erro" role="alert"></p>
+        <button type="submit" class="btn btn-primary btn-block" id="btn-enviar">Enviar para aprovação</button>
+      </form>
+    </div>
+    <div id="resultado"></div>
+  </div>
+  <footer id="site-footer" class="site-footer"></footer>
+  <script src="js/shared.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/loja-comum.js"></script>
+  <script src="js/anunciar-produto.js"></script>
+</body>
+</html>

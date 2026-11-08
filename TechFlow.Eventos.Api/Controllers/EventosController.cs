@@ -7,6 +7,7 @@ using TechFlow.Eventos.Core.Geo;
 using TechFlow.Eventos.Core.Imagens;
 using TechFlow.Eventos.Core.Interfaces;
 using TechFlow.Eventos.Core.Models;
+using TechFlow.Eventos.Core.Planos;
 using TechFlow.Eventos.Infra.Data;
 
 namespace TechFlow.Eventos.Api.Controllers;
@@ -20,9 +21,12 @@ public class EventosController : ControllerBase
     private readonly IEventoRepository _repository;
     private readonly IGeoLinkService _geo;
     private readonly IEnumerable<IEventoPublicadoHandler> _aoPublicar;
+    private readonly ICotaDestaque? _cotas;
 
-    public EventosController(IEventoRepository repository, IGeoLinkService geo, IEnumerable<IEventoPublicadoHandler> aoPublicar)
+    // ICotaDestaque é opcional: sem o módulo de Planos, não existe pedido de destaque.
+    public EventosController(IEventoRepository repository, IGeoLinkService geo, IEnumerable<IEventoPublicadoHandler> aoPublicar, ICotaDestaque? cotas = null)
     {
+        _cotas = cotas;
         _repository = repository;
         _geo = geo;
         _aoPublicar = aoPublicar;
@@ -103,6 +107,7 @@ public class EventosController : ControllerBase
         {
             var dto = ParaDto(e);
             dto.ContatoEnvio = e.ContatoEnvio;
+            dto.DestaqueSolicitado = e.DestaqueSolicitado;
             return dto;
         }));
     }
@@ -130,6 +135,20 @@ public class EventosController : ControllerBase
 
             lat = coordenadas.Value.Latitude;
             lng = coordenadas.Value.Longitude;
+        }
+
+        // Destaque do plano: exige conta e cota disponível no mês.
+        var usuarioId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (dto.PedirDestaque)
+        {
+            if (usuarioId is null) return BadRequest(new { erro = "Entre na sua conta para usar um destaque do seu plano." });
+            if (_cotas is null) return BadRequest(new { erro = "Os planos não estão disponíveis." });
+
+            var cota = await _cotas.ObterCotaAsync(usuarioId);
+            if (cota.Disponivel <= 0)
+            {
+                return BadRequest(new { erro = $"Você já usou os {cota.Limite} destaque(s) do plano {cota.Plano} neste mês. Veja os planos para ter mais." });
+            }
         }
 
         EventoFoto? foto = null;
@@ -162,7 +181,8 @@ public class EventosController : ControllerBase
             TemFoto = foto is not null, Foto = foto,
             ContatoEnvio = dto.ContatoEnvio.Trim(), TipoAutor = dto.TipoAutor,
             Status = StatusEvento.Pendente,
-            UsuarioId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            UsuarioId = usuarioId,
+            DestaqueSolicitado = dto.PedirDestaque && usuarioId is not null
         };
 
         await _repository.AdicionarAsync(evento);
@@ -181,7 +201,8 @@ public class EventosController : ControllerBase
 
         var jaEstavaAprovado = evento.Status == StatusEvento.Aprovado;
         evento.Status = dto.NovoStatus;
-        evento.Destaque = dto.NovoStatus == StatusEvento.Aprovado && dto.Destaque;
+        // Quem usou a cota do plano tem o destaque garantido na aprovação.
+        evento.Destaque = dto.NovoStatus == StatusEvento.Aprovado && (dto.Destaque || evento.DestaqueSolicitado);
         await _repository.SalvarAlteracoesAsync();
 
         // Outros módulos (ex.: newsletter) reagem à publicação sem que este controller os conheça.

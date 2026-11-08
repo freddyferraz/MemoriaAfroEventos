@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meus pedidos — Conecta Cultura</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Figtree:wght@400;500;700&display=swap" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/newsletter.css" />
+  <link rel="stylesheet" href="css/modulos.css" />
+  <link rel="stylesheet" href="css/loja.css" />
+</head>
+<body data-pagina="meus-pedidos.html">
+  <header id="site-header" class="site-header"></header>
+  <div class="page-heading"><h1>Meus pedidos</h1><p class="page-subtitle">Acompanhe o que você comprou e o que vendeu.</p></div>
+  <div class="container" style="max-width:900px;padding-bottom:72px">
+    <div class="abas" role="group" aria-label="Tipo de pedido">
+      <button type="button" data-aba="compras" aria-pressed="true">Minhas compras</button>
+      <button type="button" data-aba="vendas" aria-pressed="false">Minhas vendas</button>
+    </div>
+    <div id="lista"></div>
+  </div>
+  <footer id="site-footer" class="site-footer"></footer>
+  <script src="js/shared.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/loja-comum.js"></script>
+  <script src="js/meus-pedidos.js"></script>
+</body>
+</html>

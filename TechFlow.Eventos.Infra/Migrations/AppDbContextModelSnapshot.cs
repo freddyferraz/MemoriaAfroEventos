@@ -191,6 +191,161 @@ namespace TechFlow.Eventos.Infra.Migrations
                     b.ToTable("Avaliacoes");
                 });
 
+            modelBuilder.Entity("TechFlow.Eventos.Core.Loja.Pedido", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CompradorId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CompradorNome")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTime>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EnderecoEntrega")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<decimal>("PrecoUnitario")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<int>("ProdutoId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantidade")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Telefone")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("TituloProduto")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("VendedorId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompradorId");
+
+                    b.HasIndex("ProdutoId");
+
+                    b.HasIndex("VendedorId");
+
+                    b.ToTable("Pedidos");
+                });
+
+            modelBuilder.Entity("TechFlow.Eventos.Core.Loja.Produto", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Categoria")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Cidade")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTime>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Descricao")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("Estoque")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Preco")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("TemFoto")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Titulo")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("VendedorId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("VendedorNome")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VendedorId");
+
+                    b.HasIndex("Status", "Categoria");
+
+                    b.ToTable("Produtos");
+                });
+
+            modelBuilder.Entity("TechFlow.Eventos.Core.Loja.ProdutoFoto", b =>
+                {
+                    b.Property<int>("ProdutoId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<byte[]>("Dados")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.HasKey("ProdutoId");
+
+                    b.ToTable("ProdutoFotos");
+                });
+
             modelBuilder.Entity("TechFlow.Eventos.Core.Models.Evento", b =>
                 {
                     b.Property<int>("Id")
@@ -229,6 +384,9 @@ namespace TechFlow.Eventos.Infra.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("Destaque")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("DestaqueSolicitado")
                         .HasColumnType("boolean");
 
                     b.Property<string>("Endereco")
@@ -384,6 +542,101 @@ namespace TechFlow.Eventos.Infra.Migrations
                         .IsUnique();
 
                     b.ToTable("EnviosNewsletter");
+                });
+
+            modelBuilder.Entity("TechFlow.Eventos.Core.Pagamentos.Pagamento", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AlvoId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Descricao")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Gateway")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime?>("PagoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Referencia")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Tipo")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UsuarioId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("UsuarioNome")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<decimal>("Valor")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Referencia")
+                        .IsUnique();
+
+                    b.HasIndex("Tipo", "AlvoId");
+
+                    b.ToTable("Pagamentos");
+                });
+
+            modelBuilder.Entity("TechFlow.Eventos.Core.Planos.AssinaturaPlano", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CriadaEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("InicioEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Plano")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UsuarioId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ValidaAte")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId", "Status");
+
+                    b.ToTable("AssinaturasPlano");
                 });
 
             modelBuilder.Entity("TechFlow.Eventos.Core.Recomendacoes.PreferenciasUsuario", b =>
@@ -542,6 +795,33 @@ namespace TechFlow.Eventos.Infra.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("TechFlow.Eventos.Core.Loja.Pedido", b =>
+                {
+                    b.HasOne("TechFlow.Eventos.Core.Loja.Produto", null)
+                        .WithMany()
+                        .HasForeignKey("ProdutoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TechFlow.Eventos.Core.Loja.Produto", b =>
+                {
+                    b.HasOne("TechFlow.Eventos.Infra.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("VendedorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TechFlow.Eventos.Core.Loja.ProdutoFoto", b =>
+                {
+                    b.HasOne("TechFlow.Eventos.Core.Loja.Produto", null)
+                        .WithOne("Foto")
+                        .HasForeignKey("TechFlow.Eventos.Core.Loja.ProdutoFoto", "ProdutoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TechFlow.Eventos.Core.Models.EventoFoto", b =>
                 {
                     b.HasOne("TechFlow.Eventos.Core.Models.Evento", "Evento")
@@ -568,6 +848,15 @@ namespace TechFlow.Eventos.Infra.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("TechFlow.Eventos.Core.Planos.AssinaturaPlano", b =>
+                {
+                    b.HasOne("TechFlow.Eventos.Infra.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TechFlow.Eventos.Core.Recomendacoes.PreferenciasUsuario", b =>
                 {
                     b.HasOne("TechFlow.Eventos.Infra.Data.ApplicationUser", null)
@@ -575,6 +864,11 @@ namespace TechFlow.Eventos.Infra.Migrations
                         .HasForeignKey("UsuarioId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("TechFlow.Eventos.Core.Loja.Produto", b =>
+                {
+                    b.Navigation("Foto");
                 });
 
             modelBuilder.Entity("TechFlow.Eventos.Core.Models.Evento", b =>

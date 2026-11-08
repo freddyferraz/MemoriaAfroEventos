@@ -12,6 +12,16 @@ Piloto: Sacra Família do Tinguá e região (RJ).
 
 **QR codes** (`/qr.html`, para moderadores): QR 1 aponta para a página principal e QR 2 para o cadastro de evento.
 
+### Fase 5: loja local, planos para organizadores e pagamentos
+
+Três módulos novos (`AddLojaModule`, `AddPlanosModule`, `AddPagamentosModule`):
+
+- **Loja** (`loja.html`): qualquer pessoa vê os produtos; **anunciar e comprar exigem conta**. Anúncio novo passa por moderação (seção "Produtos pendentes" em `moderar.html`). Cada pedido é de um produto; o estoque é reservado na compra e volta se o pedido for cancelado. O vendedor vê endereço e telefone do comprador só depois do pagamento. Páginas: `loja`, `produto`, `anunciar-produto`, `meus-produtos`, `meus-pedidos`.
+- **Planos** (`planos.html`): ver os planos é público; contratar exige conta. Free (1 destaque/mês, R$ 0,00), Básico (2, R$ 20,00), Intermediário (5, R$ 40,00) e Avançado (10, R$ 80,00). Os planos pagos valem 30 dias após a confirmação do pagamento; todas as contas começam no Free. Para mudar preços ou cotas, edite `Core/Planos/Planos.cs` (`CatalogoPlanos`). Ao divulgar um evento logado, o organizador marca "Usar um destaque do meu plano": a cota é do mês civil (renova no dia 1º), o evento rejeitado devolve o destaque, e o evento aprovado sai em destaque no carrossel.
+- **Pagamentos**: `Pagamentos:Modo` define como se paga. **Desativado** (padrão): ninguém compra nem assina. **Simulado**: demonstração, a própria pessoa "aprova" na tela e nada é cobrado de verdade. **Manual**: a pessoa paga por fora (ex.: Pix) seguindo `Pagamentos:Instrucoes`, e um administrador confirma em `moderar.html`. Para usar um gateway real (Mercado Pago, Stripe, Asaas), implemente `IPagamentoGateway` e chame `PagamentoService.ConfirmarAsync` a partir do webhook do provedor.
+- **Variáveis:** `Pagamentos__Modo` (Desativado, Simulado ou Manual) e `Pagamentos__Instrucoes` (texto do modo Manual).
+- **Migration:** `dotnet ef migrations add AdicionaLojaPlanosPagamentos --project TechFlow.Eventos.Infra --startup-project TechFlow.Eventos.Api`
+
 ### Fase 4b: contas, carrossel e aprovação de cadastros
 
 - **Criar conta** (`/cadastro.html`): a conta nasce *Pendente* (role Cliente) e só consegue entrar depois que um moderador aprova em `moderar.html` (seção "Cadastros pendentes"). O login de conta pendente ou rejeitada responde 403 com a situação. Limite de 5 cadastros por hora por IP. Se o módulo Newsletter estiver com e-mail configurado, a pessoa recebe um aviso na aprovação.

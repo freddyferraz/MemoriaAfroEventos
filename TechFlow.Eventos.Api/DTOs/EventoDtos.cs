@@ -31,6 +31,9 @@ public class EventoCreateDto
 
     /// <summary>Foto opcional (JPEG, PNG ou WebP, até 2 MB).</summary>
     public IFormFile? Foto { get; set; }
+
+    /// <summary>Pede destaque usando a cota do plano da pessoa logada.</summary>
+    public bool PedirDestaque { get; set; }
 }
 
 public class EventoDto
@@ -53,6 +56,9 @@ public class EventoDto
     public string Organizador { get; set; } = string.Empty;
     public string FonteOficial { get; set; } = string.Empty;
     public bool Destaque { get; set; }
+
+    /// <summary>Preenchido só na lista de pendentes (moderadores).</summary>
+    public bool DestaqueSolicitado { get; set; }
     public bool TemFoto { get; set; }
     public StatusEvento Status { get; set; }
     public TipoAutorEvento TipoAutor { get; set; }

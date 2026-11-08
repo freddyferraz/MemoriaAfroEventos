@@ -60,6 +60,10 @@ public class EventoRepository : IEventoRepository
     public Task<EventoFoto?> ObterFotoAsync(int eventoId) =>
         _db.Fotos.AsNoTracking().FirstOrDefaultAsync(f => f.EventoId == eventoId);
 
+    public Task<int> ContarDestaquesSolicitadosAsync(string usuarioId, DateTime deUtc, DateTime ateUtc) =>
+        _db.Eventos.CountAsync(e => e.UsuarioId == usuarioId && e.DestaqueSolicitado && e.Status != StatusEvento.Rejeitado
+                                    && e.DataEnvio >= deUtc && e.DataEnvio < ateUtc);
+
     public async Task AdicionarAsync(Evento evento) => await _db.Eventos.AddAsync(evento);
 
     public Task SalvarAlteracoesAsync() => _db.SaveChangesAsync();

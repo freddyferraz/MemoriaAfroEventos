@@ -13,6 +13,9 @@ public interface IEventoRepository
     Task<IReadOnlyList<Evento>> ListarPorStatusAsync(StatusEvento status);
     Task<IReadOnlyList<string>> ListarCidadesAprovadasAsync();
     Task<EventoFoto?> ObterFotoAsync(int eventoId);
+    /// <summary>Quantos destaques a pessoa pediu no período (eventos rejeitados não contam).</summary>
+    Task<int> ContarDestaquesSolicitadosAsync(string usuarioId, DateTime deUtc, DateTime ateUtc);
+
     Task AdicionarAsync(Evento evento);
     Task SalvarAlteracoesAsync();
 }

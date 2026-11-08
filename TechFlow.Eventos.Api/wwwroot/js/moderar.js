@@ -18,7 +18,7 @@ async function carregarPendentes() {
           <div class="ev-meta">Enviado por ${e.tipoAutor === 2 ? "organizador" : "morador"}. Contato: ${escapeHtml(e.contatoEnvio || "")}</div>
         </div>
         <div class="mod-acoes">
-          <label class="check" style="padding:0"><input type="checkbox" data-destaque /> Destaque</label>
+          <label class="check" style="padding:0"><input type="checkbox" data-destaque ${e.destaqueSolicitado ? "checked" : ""} /> Destaque${e.destaqueSolicitado ? " (plano)" : ""}</label>
           <button class="btn btn-primary btn-small" data-acao="aprovar">Aprovar</button>
           <button class="btn btn-small btn-perigo" data-acao="rejeitar">Rejeitar</button>
         </div>

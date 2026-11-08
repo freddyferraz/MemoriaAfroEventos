@@ -32,6 +32,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   const contato = document.getElementById("e-contato");
   const sessao = Session.obter();
   if (sessao && !contato.value) contato.value = sessao.nomeCompleto || "";
+
+  // Destaque do plano: só para quem está logado.
+  if (sessao) {
+    try {
+      const m = await Api.meuPlano();
+      const bloco = document.getElementById("bloco-destaque");
+      bloco.hidden = false;
+      bloco.innerHTML = m.cota.disponivel > 0
+        ? `<label><input type="checkbox" id="pedir-destaque" /> <span>Usar um destaque do meu plano neste evento<br /><small style="font-weight:500;color:var(--muted)">Plano ${m.plano.nome}: restam ${m.cota.disponivel} de ${m.cota.limite} destaques neste mês. Se o moderador aprovar, o evento aparece no carrossel da página inicial.</small></span></label>`
+        : `<strong>Seus destaques deste mês acabaram</strong> (plano ${m.plano.nome}). <a href="planos.html">Ver planos</a>`;
+    } catch { /* sem o módulo de planos, o bloco não aparece */ }
+  }
   try {
     const [cats, cidades] = await Promise.all([Api.listarCategoriasEvento(), Api.listarCidadesEvento()]);
     document.getElementById("e-categoria").innerHTML = cats.map((c) => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join("");
@@ -66,6 +78,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         FonteOficial: v("e-fonte"), ContatoEnvio: v("e-contato"),
       };
       Object.entries(campos).forEach(([k, val]) => { if (val !== "") fd.append(k, val); });
+      if (document.getElementById("pedir-destaque")?.checked) fd.append("PedirDestaque", "true");
       const foto = await prepararFoto(document.getElementById("e-foto").files[0]);
       if (foto) fd.append("Foto", foto, "foto.jpg");
       await Api.enviarEvento(fd);

@@ -10,7 +10,10 @@ using TechFlow.Eventos.Infra;
 using TechFlow.Eventos.Infra.Avaliacoes;
 using TechFlow.Eventos.Infra.Calendario;
 using TechFlow.Eventos.Infra.Data;
+using TechFlow.Eventos.Infra.Loja;
 using TechFlow.Eventos.Infra.Newsletter;
+using TechFlow.Eventos.Infra.Pagamentos;
+using TechFlow.Eventos.Infra.Planos;
 using TechFlow.Eventos.Infra.Recomendacoes;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -44,6 +47,9 @@ builder.Services.AddNewsletterModule(builder.Configuration);
 builder.Services.AddAvaliacoesModule();
 builder.Services.AddCalendarioModule();
 builder.Services.AddRecomendacoesModule();
+builder.Services.AddPagamentosModule(builder.Configuration);
+builder.Services.AddLojaModule();
+builder.Services.AddPlanosModule();
 
 // Atrás do proxy do Render, o IP real do visitante vem em X-Forwarded-For (necessário para o limite por IP).
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
@@ -65,6 +71,11 @@ builder.Services.AddRateLimiter(o =>
     o.AddPolicy("avaliacoes", ctx => RateLimitPartition.GetFixedWindowLimiter(
         ctx.Connection.RemoteIpAddress?.ToString() ?? "desconhecido",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromHours(1), QueueLimit = 0 }));
+
+    // Loja: 30 anúncios ou pedidos por hora por IP.
+    o.AddPolicy("loja", ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "desconhecido",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromHours(1), QueueLimit = 0 }));
 
     // Criação de conta: 5 pedidos por hora por IP.
     o.AddPolicy("cadastro", ctx => RateLimitPartition.GetFixedWindowLimiter(

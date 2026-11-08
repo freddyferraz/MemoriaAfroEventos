@@ -63,6 +63,26 @@ const Api = {
   confirmarNewsletter: (token) => apiRequest("/newsletter/confirmar", { method: "POST", body: { token } }),
   cancelarNewsletter: (token) => apiRequest("/newsletter/cancelar", { method: "POST", body: { token } }),
   moderarEvento: (id, dto) => apiRequest(`/eventos/${id}/moderar`, { method: "PATCH", body: dto }),
+  listarProdutos: (f = {}) => apiRequest(`/produtos${montarQuery(f)}`),
+  obterProduto: (id) => apiRequest(`/produtos/${id}`),
+  categoriasProduto: () => apiRequest("/produtos/categorias"),
+  cidadesProduto: () => apiRequest("/produtos/cidades"),
+  meusProdutos: () => apiRequest("/produtos/meus"),
+  anunciarProduto: (formData) => apiRequest("/produtos", { method: "POST", body: formData }),
+  atualizarProduto: (id, dto) => apiRequest(`/produtos/${id}`, { method: "PATCH", body: dto }),
+  produtosPendentes: () => apiRequest("/produtos/pendentes"),
+  moderarProduto: (id, aprovar) => apiRequest(`/produtos/${id}/moderar`, { method: "PATCH", body: { aprovar } }),
+  comprar: (dto) => apiRequest("/pedidos", { method: "POST", body: dto }),
+  minhasCompras: () => apiRequest("/pedidos/compras"),
+  minhasVendas: () => apiRequest("/pedidos/vendas"),
+  acaoPedido: (id, acao) => apiRequest(`/pedidos/${id}/${acao}`, { method: "PATCH" }),
+  listarPlanos: () => apiRequest("/planos"),
+  meuPlano: () => apiRequest("/planos/meu"),
+  contratarPlano: (plano) => apiRequest("/planos/contratar", { method: "POST", body: { plano } }),
+  obterPagamento: (ref) => apiRequest(`/pagamentos/${ref}`),
+  simularPagamento: (ref) => apiRequest(`/pagamentos/${ref}/simular`, { method: "POST" }),
+  pagamentosPendentes: () => apiRequest("/pagamentos/pendentes"),
+  confirmarPagamento: (ref) => apiRequest(`/pagamentos/${ref}/confirmar`, { method: "POST" }),
   registrar: (dto) => apiRequest("/auth/registrar", { method: "POST", body: dto }),
   listarCadastrosPendentes: () => apiRequest("/auth/cadastros/pendentes"),
   moderarCadastro: (id, aprovar) => apiRequest(`/auth/cadastros/${id}/moderar`, { method: "PATCH", body: { aprovar } }),
@@ -109,7 +129,12 @@ function montarHeader(paginaAtual) {
     { href: "explorar.html", label: "Explorar" },
     { href: "divulgar.html", label: "Divulgar evento" },
     { href: "newsletter.html", label: "Newsletter" },
+    { href: "loja.html", label: "Loja" },
+    { href: "planos.html", label: "Planos" },
   ];
+  if (auth) {
+    paginas.push({ href: "meus-pedidos.html", label: "Meus pedidos" }, { href: "meus-produtos.html", label: "Meus produtos" });
+  }
   if (Session.ehModerador()) {
     paginas.push({ href: "moderar.html", label: "Moderar" }, { href: "qr.html", label: "QR codes" });
   }
