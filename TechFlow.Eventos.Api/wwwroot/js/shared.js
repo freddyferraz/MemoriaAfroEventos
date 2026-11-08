@@ -12,6 +12,7 @@ const Session = {
     } catch { return null; }
   },
   limpar() { localStorage.removeItem(this.KEY); },
+  logado() { return !!this.obter(); },
   ehModerador() { return !!this.obter()?.roles?.some((r) => r === "Admin" || r === "Moderador"); },
 };
 
@@ -62,6 +63,19 @@ const Api = {
   confirmarNewsletter: (token) => apiRequest("/newsletter/confirmar", { method: "POST", body: { token } }),
   cancelarNewsletter: (token) => apiRequest("/newsletter/cancelar", { method: "POST", body: { token } }),
   moderarEvento: (id, dto) => apiRequest(`/eventos/${id}/moderar`, { method: "PATCH", body: dto }),
+  registrar: (dto) => apiRequest("/auth/registrar", { method: "POST", body: dto }),
+  listarCadastrosPendentes: () => apiRequest("/auth/cadastros/pendentes"),
+  moderarCadastro: (id, aprovar) => apiRequest(`/auth/cadastros/${id}/moderar`, { method: "PATCH", body: { aprovar } }),
+  meusInteresses: () => apiRequest("/recomendacoes/meus-interesses"),
+  salvarInteresses: (dto) => apiRequest("/recomendacoes/meus-interesses", { method: "PUT", body: dto }),
+  resumoAvaliacoes: (ids) => apiRequest(`/avaliacoes/resumo?ids=${ids.join(",")}`),
+  avaliacoesDoEvento: (id) => apiRequest(`/avaliacoes/evento/${id}`),
+  enviarAvaliacao: (dto) => apiRequest("/avaliacoes", { method: "POST", body: dto }),
+  listarAvaliacoesPendentes: () => apiRequest("/avaliacoes/pendentes"),
+  moderarAvaliacao: (id, aprovar) => apiRequest(`/avaliacoes/${id}/moderar`, { method: "PATCH", body: { aprovar } }),
+  linksCalendario: (id) => apiRequest(`/calendario/evento/${id}/links`),
+  recomendar: (dto) => apiRequest("/recomendacoes", { method: "POST", body: dto }),
+  eventosSimilares: (id, limite = 4) => apiRequest(`/recomendacoes/similares/${id}?limite=${limite}`),
 
   /** Foto de evento ainda não aprovado: só moderadores, então a busca leva o token e devolve uma URL local (blob). */
   async obterFotoBlob(id) {
@@ -102,7 +116,7 @@ function montarHeader(paginaAtual) {
   const links = paginas.map((p) => `<a href="${p.href}" ${p.href === paginaAtual ? 'aria-current="page"' : ""}>${p.label}</a>`).join("");
   const acesso = auth
     ? `<button class="btn btn-outline btn-small" id="btn-logout" type="button">Sair (${escapeHtml((auth.nomeCompleto || auth.email).split(" ")[0])})</button>`
-    : `<a class="btn btn-outline btn-small" href="login.html">Entrar</a>`;
+    : `<a class="btn btn-outline btn-small" href="login.html">Entrar</a> <a class="btn btn-primary btn-small" href="cadastro.html">Criar conta</a>`;
 
   document.getElementById("site-header").innerHTML = `
     <div class="container">

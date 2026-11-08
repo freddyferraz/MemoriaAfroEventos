@@ -50,6 +50,16 @@ public static class EmailTemplates
         return new EmailMensagem(a.Email, $"Novo evento: {e.Titulo} ({e.Data:dd/MM})", Layout(o, null, corpo), texto);
     }
 
+    public static EmailMensagem CadastroAprovado(NewsletterOptions o, string nome, string email)
+    {
+        var link = $"{o.BaseUrlLimpa}/login.html";
+        var html = Layout(o, "Seu cadastro foi aprovado",
+            $"<p>Olá, {H(nome)}!</p><p>Um moderador aprovou o seu cadastro. Agora você já pode entrar, escolher seus interesses e receber sugestões de eventos.</p>" +
+            $"<p>{Botao(link, "Entrar na minha conta")}</p>");
+        var texto = $"Olá, {nome}! Seu cadastro foi aprovado. Entre em: {link}";
+        return new EmailMensagem(email, "Seu cadastro foi aprovado", html, texto);
+    }
+
     private static string Layout(NewsletterOptions o, string? titulo, string conteudo) =>
         "<!DOCTYPE html><html lang=\"pt-br\"><body style=\"margin:0;background:#f3f6f1;font-family:Arial,Helvetica,sans-serif;color:#1d2a1a\">" +
         "<div style=\"max-width:560px;margin:0 auto;padding:24px 16px\">" +

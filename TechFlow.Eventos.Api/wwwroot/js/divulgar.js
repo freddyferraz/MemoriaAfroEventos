@@ -27,6 +27,11 @@ async function prepararFoto(arquivo) {
 
 document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("e-data").min = EventosUI.iso(new Date());
+
+  // Quem está logado já vem com o nome no campo de contato (pode ser editado).
+  const contato = document.getElementById("e-contato");
+  const sessao = Session.obter();
+  if (sessao && !contato.value) contato.value = sessao.nomeCompleto || "";
   try {
     const [cats, cidades] = await Promise.all([Api.listarCategoriasEvento(), Api.listarCidadesEvento()]);
     document.getElementById("e-categoria").innerHTML = cats.map((c) => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join("");

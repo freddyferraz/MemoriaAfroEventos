@@ -37,10 +37,45 @@ const EventosUI = {
             <h3>${escapeHtml(e.titulo)}</h3>
             <span class="tag">${escapeHtml(e.categoriaNome)}</span>
             <span class="tag ${e.gratuito ? "gratis" : ""}">${this.preco(e)}</span>
-            <p class="ev-meta">${this.hora(e.horario)}, ${escapeHtml(e.cidade)}${dist}</p>
+            <p class="ev-meta">${this.hora(e.horario)}, ${escapeHtml(e.cidade)}${dist}<span class="nota" data-nota="${e.id}"></span></p>
           </div>
         </div>
       </a>`;
     },
     vazio: (msg) => `<div class="empty-state">${msg}</div>`,
 };
+
+/* Nota média nos cards (módulo Avaliações). Os cards nascem com um espaço vazio e este bloco o preenche,
+   buscando o resumo de todos os eventos da tela em uma única chamada. */
+(function () {
+    const cache = new Map();
+    let timer;
+
+    function aplicar(span, r) {
+        if (r && r.total > 0) {
+            span.innerHTML = `<span class="estrela" aria-hidden="true">★</span> ${r.media.toFixed(1).replace(".", ",")} (${r.total})`;
+            span.setAttribute("aria-label", `Nota ${r.media} de 5, ${r.total} ${r.total === 1 ? "avaliação" : "avaliações"}`);
+        }
+        span.dataset.ok = "1";
+    }
+
+    async function preencher() {
+        const spans = [...document.querySelectorAll("[data-nota]:not([data-ok])")];
+        if (!spans.length) return;
+        const novos = [...new Set(spans.map((s) => Number(s.dataset.nota)).filter((id) => !cache.has(id)))];
+        if (novos.length) {
+            try {
+                const lista = await Api.resumoAvaliacoes(novos);
+                novos.forEach((id) => cache.set(id, null));
+                lista.forEach((r) => cache.set(r.eventoId, r));
+            } catch { return; }
+        }
+        spans.forEach((s) => aplicar(s, cache.get(Number(s.dataset.nota))));
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(preencher, 60); })
+            .observe(document.body, { childList: true, subtree: true });
+        preencher();
+    });
+})();

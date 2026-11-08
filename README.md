@@ -12,6 +12,23 @@ Piloto: Sacra Família do Tinguá e região (RJ).
 
 **QR codes** (`/qr.html`, para moderadores): QR 1 aponta para a página principal e QR 2 para o cadastro de evento.
 
+### Fase 4b: contas, carrossel e aprovação de cadastros
+
+- **Criar conta** (`/cadastro.html`): a conta nasce *Pendente* (role Cliente) e só consegue entrar depois que um moderador aprova em `moderar.html` (seção "Cadastros pendentes"). O login de conta pendente ou rejeitada responde 403 com a situação. Limite de 5 cadastros por hora por IP. Se o módulo Newsletter estiver com e-mail configurado, a pessoa recebe um aviso na aprovação.
+- **Meus interesses** só para quem está logado: as categorias e cidades escolhidas ficam na conta (tabela `PreferenciasUsuario`); os sinais de uso (abrir evento, agenda, boa avaliação) ficam no navegador, por conta, e só são registrados com login. `POST /api/recomendacoes` passou a exigir login. Quem não está logado vê um convite para entrar ou criar conta.
+- **Carrossel:** "Em destaque" (deslizando devagar e sem parar a 30 px/s, ajustável pelo atributo `data-velocidade`; há botão Pausar, ele para ao passar o mouse, focar ou tocar, e fica desligado para quem prefere menos movimento) e "Recomendado para você". Rolagem por toque, setas e teclado (`js/carrossel.js`).
+- **Divulgar evento:** logado, o campo de contato já vem com o nome da pessoa.
+- **Migration:** `dotnet ef migrations add AdicionaContasEPreferencias --project TechFlow.Eventos.Infra --startup-project TechFlow.Eventos.Api`. A coluna `Status` de `AspNetUsers` usa `Aprovado = 0` como padrão, então administrador e moderadores existentes continuam podendo entrar.
+
+### Fase 4: recomendações, calendário e avaliações
+
+Três módulos independentes (cada um com `AddXModule` no `Program.cs`):
+
+- **Recomendações** (`Core/Recomendacoes`): seção "Recomendado para você" no início e "Você também pode gostar" nos detalhes. O perfil de interesses fica **só no navegador** (localStorage): categorias e cidades escolhidas pela pessoa, mais sinais de uso (abrir um evento, adicionar à agenda, avaliar bem). O navegador envia o perfil em `POST /api/recomendacoes` e o servidor não o guarda. A pontuação é simples e explicável (categoria, cidade, destaque e proximidade da data), e cada sugestão mostra o motivo.
+- **Calendário** (`Core/Calendario`): na página do evento, botões para Google Agenda, Outlook.com, Microsoft 365 e arquivo `.ics` (Apple e demais). Em Explorar, é possível assinar um feed `.ics` com a categoria e a cidade filtradas (`GET /api/calendario/feed.ics`). O cadastro não tem horário de término, então a agenda reserva 2 horas; o `.ics` inclui lembrete 1 hora antes.
+- **Avaliações** (`Core/Avaliacoes`): nota de 1 a 5 e comentário, só para eventos que já aconteceram. A nota sem comentário é publicada na hora; o comentário passa pela moderação em `moderar.html`. Limite de 10 envios por hora por IP, campo isca anti-robô e bloqueio de links. A nota média aparece nos cards.
+- **Migration:** `dotnet ef migrations add AdicionaAvaliacoes --project TechFlow.Eventos.Infra --startup-project TechFlow.Eventos.Api` (só o módulo de avaliações cria tabela).
+
 ### Fase 3: newsletter por preferência (módulo Newsletter)
 
 - **Inscrição** (`/newsletter.html`): e-mail, categorias e cidades de interesse (vazio = todas) e aceite do consentimento (LGPD).

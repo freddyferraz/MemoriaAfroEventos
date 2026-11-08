@@ -1,8 +1,12 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using TechFlow.Eventos.Core.Avaliacoes;
 using TechFlow.Eventos.Core.Models;
+using TechFlow.Eventos.Core.Recomendacoes;
 using TechFlow.Eventos.Core.Newsletter;
+using TechFlow.Eventos.Infra.Avaliacoes;
 using TechFlow.Eventos.Infra.Newsletter;
+using TechFlow.Eventos.Infra.Recomendacoes;
 
 namespace TechFlow.Eventos.Infra.Data;
 
@@ -14,6 +18,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<Evento> Eventos => Set<Evento>();
     public DbSet<EventoFoto> Fotos => Set<EventoFoto>();
+    public DbSet<Avaliacao> Avaliacoes => Set<Avaliacao>();
+    public DbSet<PreferenciasUsuario> Preferencias => Set<PreferenciasUsuario>();
     public DbSet<Assinante> Assinantes => Set<Assinante>();
     public DbSet<EnvioNewsletter> EnviosNewsletter => Set<EnvioNewsletter>();
 
@@ -49,5 +55,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
         });
 
         NewsletterModelConfig.Aplicar(builder);
+        AvaliacoesModelConfig.Aplicar(builder);
+        RecomendacoesModelConfig.Aplicar(builder);
     }
 }

@@ -7,8 +7,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using TechFlow.Eventos.Infra;
+using TechFlow.Eventos.Infra.Avaliacoes;
+using TechFlow.Eventos.Infra.Calendario;
 using TechFlow.Eventos.Infra.Data;
 using TechFlow.Eventos.Infra.Newsletter;
+using TechFlow.Eventos.Infra.Recomendacoes;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -38,6 +41,9 @@ if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("Default
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddNewsletterModule(builder.Configuration);
+builder.Services.AddAvaliacoesModule();
+builder.Services.AddCalendarioModule();
+builder.Services.AddRecomendacoesModule();
 
 // Atrás do proxy do Render, o IP real do visitante vem em X-Forwarded-For (necessário para o limite por IP).
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
@@ -52,6 +58,16 @@ builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     o.AddPolicy("newsletter", ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "desconhecido",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromHours(1), QueueLimit = 0 }));
+
+    // Avaliações: 10 envios por hora por IP.
+    o.AddPolicy("avaliacoes", ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "desconhecido",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromHours(1), QueueLimit = 0 }));
+
+    // Criação de conta: 5 pedidos por hora por IP.
+    o.AddPolicy("cadastro", ctx => RateLimitPartition.GetFixedWindowLimiter(
         ctx.Connection.RemoteIpAddress?.ToString() ?? "desconhecido",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromHours(1), QueueLimit = 0 }));
 });

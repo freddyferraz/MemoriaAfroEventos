@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Figtree:wght@400;500;700&display=swap" />
   <link rel="stylesheet" href="css/styles.css" />
   <link rel="stylesheet" href="css/newsletter.css" />
+  <link rel="stylesheet" href="css/modulos.css" />
 </head>
 <body data-pagina="index.html">
   <header id="site-header" class="site-header"></header>
@@ -28,8 +29,41 @@
 
   <section class="section">
     <div class="container">
+      <div class="rec-bloco" id="para-voce">
+        <div class="section-header"><h2>Recomendado para você</h2></div>
+
+        <div class="cta" id="para-voce-visitante" hidden style="margin-top:0">
+          <div>
+            <h3>Sugestões feitas para você</h3>
+            <p>Entre ou crie sua conta para escolher seus interesses e receber recomendações de eventos.</p>
+          </div>
+          <div class="cal-botoes">
+            <a class="btn btn-primary" href="login.html">Entrar</a>
+            <a class="btn btn-outline" href="cadastro.html">Criar conta</a>
+          </div>
+        </div>
+
+        <div id="para-voce-conteudo" hidden>
+          <p class="ev-meta" id="para-voce-info"></p>
+          <div class="chips" id="para-voce-chips"></div>
+          <details class="painel-interesses" id="painel-interesses">
+            <summary>Escolher meus interesses</summary>
+            <fieldset class="opcoes"><legend>Categorias</legend><div class="opcoes-grid" id="int-categorias"></div></fieldset>
+            <fieldset class="opcoes" id="int-bloco-cidades" hidden><legend>Cidades</legend><div class="opcoes-grid" id="int-cidades"></div></fieldset>
+            <p class="form-hint">Seus interesses ficam salvos na sua conta. Eles também se ajustam conforme os eventos que você abre ou adiciona à agenda.</p>
+            <button type="button" class="btn btn-primary btn-small" id="int-salvar">Salvar interesses</button>
+            <button type="button" class="btn btn-outline btn-small" id="int-limpar">Limpar</button>
+          </details>
+          <div class="carrossel" data-carrossel aria-label="Recomendado para você">
+            <div class="carrossel-trilho" id="para-voce-grid"><div class="empty-state">Carregando...</div></div>
+          </div>
+        </div>
+      </div>
+
       <div class="section-header"><h2>Em destaque</h2></div>
-      <div class="ev-grid" id="destaques"><div class="empty-state">Carregando...</div></div>
+      <div class="carrossel" data-carrossel data-autoplay data-velocidade="30" aria-label="Eventos em destaque">
+        <div class="carrossel-trilho" id="destaques"><div class="empty-state">Carregando...</div></div>
+      </div>
 
       <div class="section-header" style="margin-top:44px"><h2>Próximos eventos</h2></div>
       <div class="ev-grid" id="proximos"></div>
@@ -55,5 +89,8 @@
   <script src="js/shared.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/index.js"></script>
+  <script src="js/carrossel.js"></script>
+  <script src="js/interesses.js"></script>
+  <script src="js/recomendacoes.js"></script>
 </body>
 </html>

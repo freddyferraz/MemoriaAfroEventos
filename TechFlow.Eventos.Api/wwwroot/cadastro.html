@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Criar conta — Conecta Cultura</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Figtree:wght@400;500;700&display=swap" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/newsletter.css" />
+</head>
+<body data-pagina="cadastro.html">
+  <header id="site-header" class="site-header"></header>
+  <div class="page-heading">
+    <h1>Criar conta</h1>
+    <p class="page-subtitle">Com uma conta você escolhe seus interesses e recebe sugestões de eventos. Todo cadastro é analisado por um moderador antes de ser liberado.</p>
+  </div>
+  <div class="container" style="max-width:480px;padding-bottom:72px">
+    <div id="resultado" role="status" aria-live="polite"></div>
+    <form class="form-panel" id="form-cadastro" novalidate>
+      <div class="form-field"><label for="c-nome">Nome completo *</label><input type="text" id="c-nome" autocomplete="name" maxlength="150" required /></div>
+      <div class="form-field"><label for="c-email">E-mail *</label><input type="email" id="c-email" autocomplete="email" maxlength="254" required /></div>
+      <div class="form-field"><label for="c-senha">Senha *</label><input type="password" id="c-senha" autocomplete="new-password" maxlength="100" required />
+        <div class="form-hint">Mínimo de 8 caracteres, com letra maiúscula, letra minúscula e número.</div></div>
+      <div class="form-field"><label for="c-senha2">Repita a senha *</label><input type="password" id="c-senha2" autocomplete="new-password" maxlength="100" required /></div>
+      <label class="aceite">
+        <input type="checkbox" id="c-aceite" />
+        <span>Concordo que meu nome e e-mail sejam usados para manter minha conta e personalizar as sugestões de eventos.</span>
+      </label>
+      <p class="erro-form" id="erro" role="alert"></p>
+      <button type="submit" class="btn btn-primary btn-block" id="btn-cadastrar">Criar conta</button>
+      <p style="text-align:center;margin:16px 0 0">Já tem conta? <a href="login.html">Entrar</a></p>
+    </form>
+  </div>
+  <footer id="site-footer" class="site-footer"></footer>
+  <script src="js/shared.js"></script>
+  <script src="js/cadastro.js"></script>
+</body>
+</html>

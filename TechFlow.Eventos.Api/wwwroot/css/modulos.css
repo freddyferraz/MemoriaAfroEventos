@@ -1,0 +1,46 @@
+/* Fase 4: avaliações, calendário e recomendações. Estilos próprios; não alteram o styles.css. */
+.nota{margin-left:8px;font-weight:700;color:var(--ink);white-space:nowrap}
+.estrela{color:var(--orange)}
+.rec-motivo{margin:6px 2px 0;font-size:.85rem;color:var(--muted)}
+.rec-bloco{margin-bottom:36px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+.chip{display:inline-block;padding:3px 12px;border-radius:999px;background:var(--soft);color:var(--green);font-size:.85rem;font-weight:700}
+.painel-interesses{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg);padding:12px 16px;margin:0 0 16px}
+.painel-interesses summary{cursor:pointer;font-weight:700;color:var(--green)}
+.painel-interesses .opcoes{margin-top:12px}
+.extra{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg);padding:22px;margin-top:20px}
+.extra h2{font-size:1.25rem}
+.cal-botoes{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+.resumo-nota{font-size:1.1rem;font-weight:700;margin:0 0 12px}
+.avaliacao{border-top:1px solid var(--line);padding:12px 0}
+.avaliacao:first-of-type{border-top:0}
+.avaliacao .quem{font-weight:700}
+.avaliacao .quando{color:var(--muted);font-size:.85rem;margin-left:8px}
+.avaliacao p{margin:4px 0 0;white-space:pre-line}
+.estrelas{border:0;padding:0;margin:0 0 12px}
+.estrelas legend{font-weight:700;font-size:.88rem;margin-bottom:6px}
+.nota-op{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);border-radius:999px;padding:4px 12px;margin:0 6px 6px 0;font-weight:700;cursor:pointer;background:#fff}
+.nota-op:has(input:checked){background:var(--green);color:#fff;border-color:var(--green)}
+.nota-op:has(input:focus-visible){outline:3px solid var(--blue);outline-offset:2px}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.feed{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;margin:0 0 16px}
+.feed summary{cursor:pointer;font-weight:700;color:var(--green)}
+.feed input{width:100%;padding:8px 10px;border:1.5px solid var(--line);border-radius:var(--radius);font:inherit;font-size:.85rem;margin:8px 0}
+
+.cta[hidden]{display:none}
+
+/* Carrossel (destaques e recomendações) */
+.carrossel{position:relative;margin-bottom:8px}
+.carrossel-trilho{display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding:0 2px;padding:4px 2px 12px;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.carrossel-trilho>*{flex:0 0 min(340px,86%);scroll-snap-align:start;min-width:0}
+.carrossel-trilho>.empty-state{flex:1 1 100%}
+.carrossel-trilho:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:var(--radius)}
+.carrossel-btn{position:absolute;top:calc(50% - 22px);width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--green);font-size:1.7rem;line-height:1;box-shadow:var(--shadow);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
+.carrossel-btn.anterior{left:-10px}.carrossel-btn.proximo{right:-10px}
+.carrossel-btn:hover:not(:disabled){background:var(--green);color:#fff}
+.carrossel-btn:disabled{opacity:.35;cursor:default}
+.carrossel-btn:focus-visible,.carrossel-pausa:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.carrossel-pausa{position:absolute;right:0;top:-44px;border:1.5px solid var(--line);background:#fff;color:var(--green);border-radius:999px;padding:4px 12px;font-size:.8rem;font-weight:700;cursor:pointer}
+.carrossel [hidden]{display:none}
+@media (max-width:600px){.carrossel-btn.anterior{left:2px}.carrossel-btn.proximo{right:2px}}
+@media (prefers-reduced-motion:reduce){.carrossel-trilho{scroll-behavior:auto}}

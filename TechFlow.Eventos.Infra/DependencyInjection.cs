@@ -23,6 +23,7 @@ public static class DependencyInjection
                 o.User.RequireUniqueEmail = true;
             })
             .AddEntityFrameworkStores<AppDbContext>()
+            .AddErrorDescriber<IdentityErrorDescriberPt>()
             .AddDefaultTokenProviders();
 
         services.AddHttpClient<IGeoLinkService, GoogleMapsLinkService>(c =>

@@ -154,6 +154,43 @@ namespace TechFlow.Eventos.Infra.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("TechFlow.Eventos.Core.Avaliacoes.Avaliacao", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Comentario")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("DataEnvio")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("EventoId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<int>("Nota")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventoId", "Status");
+
+                    b.ToTable("Avaliacoes");
+                });
+
             modelBuilder.Entity("TechFlow.Eventos.Core.Models.Evento", b =>
                 {
                     b.Property<int>("Id")
@@ -349,6 +386,27 @@ namespace TechFlow.Eventos.Infra.Migrations
                     b.ToTable("EnviosNewsletter");
                 });
 
+            modelBuilder.Entity("TechFlow.Eventos.Core.Recomendacoes.PreferenciasUsuario", b =>
+                {
+                    b.Property<string>("UsuarioId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int[]>("Categorias")
+                        .IsRequired()
+                        .HasColumnType("integer[]");
+
+                    b.Property<string[]>("Cidades")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.HasKey("UsuarioId");
+
+                    b.ToTable("Preferencias");
+                });
+
             modelBuilder.Entity("TechFlow.Eventos.Infra.Data.ApplicationUser", b =>
                 {
                     b.Property<string>("Id")
@@ -360,6 +418,9 @@ namespace TechFlow.Eventos.Infra.Migrations
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasColumnType("text");
+
+                    b.Property<DateTime?>("DataCadastro")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
@@ -398,6 +459,9 @@ namespace TechFlow.Eventos.Infra.Migrations
 
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
 
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("boolean");
@@ -469,6 +533,15 @@ namespace TechFlow.Eventos.Infra.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("TechFlow.Eventos.Core.Avaliacoes.Avaliacao", b =>
+                {
+                    b.HasOne("TechFlow.Eventos.Core.Models.Evento", null)
+                        .WithMany()
+                        .HasForeignKey("EventoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TechFlow.Eventos.Core.Models.EventoFoto", b =>
                 {
                     b.HasOne("TechFlow.Eventos.Core.Models.Evento", "Evento")
@@ -491,6 +564,15 @@ namespace TechFlow.Eventos.Infra.Migrations
                     b.HasOne("TechFlow.Eventos.Core.Models.Evento", null)
                         .WithMany()
                         .HasForeignKey("EventoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TechFlow.Eventos.Core.Recomendacoes.PreferenciasUsuario", b =>
+                {
+                    b.HasOne("TechFlow.Eventos.Infra.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

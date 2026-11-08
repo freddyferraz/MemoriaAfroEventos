@@ -12,6 +12,7 @@ public static class DbSeeder
 {
     public const string RoleAdmin = "Admin";
     public const string RoleModerador = "Moderador";
+    public const string RoleCliente = "Cliente";
 
     /// <summary>
     /// Cria as roles, o primeiro administrador (a partir de Seed:AdminEmail / Seed:AdminSenha,
@@ -27,7 +28,7 @@ public static class DbSeeder
         var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
         var db = sp.GetRequiredService<AppDbContext>();
 
-        foreach (var role in new[] { RoleAdmin, RoleModerador })
+        foreach (var role in new[] { RoleAdmin, RoleModerador, RoleCliente })
         {
             if (!await roles.RoleExistsAsync(role)) await roles.CreateAsync(new IdentityRole(role));
         }

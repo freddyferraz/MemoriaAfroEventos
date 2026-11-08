@@ -31,6 +31,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             try { await navigator.clipboard.writeText(location.href); msg.textContent = " Link copiado."; }
             catch { msg.textContent = " Copie o endereço do navegador."; }
         });
+        // Os módulos (calendário, avaliações, recomendações) escutam este evento e preenchem as suas áreas.
+        document.dispatchEvent(new CustomEvent("evento-carregado", { detail: e }));
     } catch (erro) {
         alvo.innerHTML = EventosUI.vazio(erro.status === 404 ? "Evento não encontrado ou ainda em análise." : "Não foi possível carregar o evento.");
     }
