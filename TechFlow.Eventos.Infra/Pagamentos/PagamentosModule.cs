@@ -17,6 +17,9 @@ public static class PagamentosModelConfig
             p.Property(x => x.Descricao).HasMaxLength(300);
             p.Property(x => x.UsuarioNome).HasMaxLength(150);
             p.Property(x => x.Gateway).HasMaxLength(30);
+            p.Property(x => x.FinalCartao).HasMaxLength(4);
+            p.Property(x => x.CodigoPix).HasMaxLength(400);
+            p.Property(x => x.CodigoBoleto).HasMaxLength(60);
             p.Ignore(x => x.UrlPagamento);
             p.HasIndex(x => new { x.Tipo, x.AlvoId });
         });

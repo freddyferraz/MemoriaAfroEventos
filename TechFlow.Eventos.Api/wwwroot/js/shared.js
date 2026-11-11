@@ -80,6 +80,10 @@ const Api = {
   meuPlano: () => apiRequest("/planos/meu"),
   contratarPlano: (plano) => apiRequest("/planos/contratar", { method: "POST", body: { plano } }),
   obterPagamento: (ref) => apiRequest(`/pagamentos/${ref}`),
+  comprarIngresso: (dto) => apiRequest("/ingressos", { method: "POST", body: dto }),
+  meusIngressos: () => apiRequest("/ingressos/meus"),
+  cancelarIngresso: (id) => apiRequest(`/ingressos/${id}/cancelar`, { method: "PATCH" }),
+  pagarPagamento: (ref, dto) => apiRequest(`/pagamentos/${ref}/pagar`, { method: "POST", body: dto }),
   simularPagamento: (ref) => apiRequest(`/pagamentos/${ref}/simular`, { method: "POST" }),
   pagamentosPendentes: () => apiRequest("/pagamentos/pendentes"),
   confirmarPagamento: (ref) => apiRequest(`/pagamentos/${ref}/confirmar`, { method: "POST" }),
@@ -133,7 +137,7 @@ function montarHeader(paginaAtual) {
     { href: "planos.html", label: "Planos" },
   ];
   if (auth) {
-    paginas.push({ href: "meus-pedidos.html", label: "Meus pedidos" }, { href: "meus-produtos.html", label: "Meus produtos" });
+    paginas.push({ href: "meus-pedidos.html", label: "Meus pedidos" }, { href: "meus-produtos.html", label: "Meus produtos" }, { href: "meus-ingressos.html", label: "Meus ingressos" });
   }
   if (Session.ehModerador()) {
     paginas.push({ href: "moderar.html", label: "Moderar" }, { href: "qr.html", label: "QR codes" });

@@ -54,6 +54,17 @@ public class PedidoCreateDto
     [Required, MaxLength(30)] public string Telefone { get; set; } = string.Empty;
 }
 
+// ---------- Pagamentos ----------
+public class PagarDto
+{
+    /// <summary>1 = Pix, 2 = Boleto, 3 = Cartão de crédito, 4 = Cartão de débito.</summary>
+    [Range(1, 4)] public int Metodo { get; set; }
+    [Range(1, 12)] public int? Parcelas { get; set; }
+
+    /// <summary>Últimos 4 dígitos do cartão. O número completo nunca é enviado ao servidor.</summary>
+    [MaxLength(4)] public string? FinalCartao { get; set; }
+}
+
 // ---------- Planos ----------
 public class ContratarPlanoDto
 {

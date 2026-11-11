@@ -10,6 +10,7 @@ using TechFlow.Eventos.Infra;
 using TechFlow.Eventos.Infra.Avaliacoes;
 using TechFlow.Eventos.Infra.Calendario;
 using TechFlow.Eventos.Infra.Data;
+using TechFlow.Eventos.Infra.Ingressos;
 using TechFlow.Eventos.Infra.Loja;
 using TechFlow.Eventos.Infra.Newsletter;
 using TechFlow.Eventos.Infra.Pagamentos;
@@ -50,6 +51,8 @@ builder.Services.AddRecomendacoesModule();
 builder.Services.AddPagamentosModule(builder.Configuration);
 builder.Services.AddLojaModule();
 builder.Services.AddPlanosModule();
+builder.Services.AddIngressosModule();
+builder.Services.AddDemonstracao(builder.Configuration);
 
 // Atrás do proxy do Render, o IP real do visitante vem em X-Forwarded-For (necessário para o limite por IP).
 builder.Services.Configure<ForwardedHeadersOptions>(o =>

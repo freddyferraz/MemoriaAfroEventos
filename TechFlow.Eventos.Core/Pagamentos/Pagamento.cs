@@ -3,7 +3,16 @@ namespace TechFlow.Eventos.Core.Pagamentos;
 public enum TipoPagamento
 {
     Pedido = 1,
-    Assinatura = 2
+    Assinatura = 2,
+    Ingresso = 3
+}
+
+public enum MetodoPagamento
+{
+    Pix = 1,
+    Boleto = 2,
+    CartaoCredito = 3,
+    CartaoDebito = 4
 }
 
 public enum StatusPagamento
@@ -30,6 +39,14 @@ public class Pagamento
     public string Gateway { get; set; } = string.Empty;
     public DateTime CriadoEm { get; set; } = DateTime.UtcNow;
     public DateTime? PagoEm { get; set; }
+
+    // Dados da forma de pagamento escolhida (demonstração). Nunca guardamos número de cartão: só os 4 últimos dígitos, para o comprovante.
+    public MetodoPagamento? Metodo { get; set; }
+    public int Parcelas { get; set; } = 1;
+    public string? FinalCartao { get; set; }
+    public string? CodigoPix { get; set; }
+    public string? CodigoBoleto { get; set; }
+    public DateTime? VenceEm { get; set; }
 
     public string UrlPagamento => $"/pagamento.html?ref={Referencia}";
 }

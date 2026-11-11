@@ -191,6 +191,63 @@ namespace TechFlow.Eventos.Infra.Migrations
                     b.ToTable("Avaliacoes");
                 });
 
+            modelBuilder.Entity("TechFlow.Eventos.Core.Ingressos.CompraIngresso", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Codigo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("CompradorId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CompradorNome")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTime?>("ConfirmadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("EventoId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("PrecoUnitario")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<int>("Quantidade")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Codigo")
+                        .IsUnique();
+
+                    b.HasIndex("CompradorId");
+
+                    b.HasIndex("EventoId");
+
+                    b.ToTable("ComprasIngresso");
+                });
+
             modelBuilder.Entity("TechFlow.Eventos.Core.Loja.Pedido", b =>
                 {
                     b.Property<int>("Id")
@@ -555,6 +612,14 @@ namespace TechFlow.Eventos.Infra.Migrations
                     b.Property<int>("AlvoId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("CodigoBoleto")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("CodigoPix")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
                     b.Property<DateTime>("CriadoEm")
                         .HasColumnType("timestamp with time zone");
 
@@ -563,13 +628,23 @@ namespace TechFlow.Eventos.Infra.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
 
+                    b.Property<string>("FinalCartao")
+                        .HasMaxLength(4)
+                        .HasColumnType("character varying(4)");
+
                     b.Property<string>("Gateway")
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<int?>("Metodo")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("PagoEm")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Parcelas")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Referencia")
                         .IsRequired()
@@ -594,6 +669,9 @@ namespace TechFlow.Eventos.Infra.Migrations
                     b.Property<decimal>("Valor")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTime?>("VenceEm")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
@@ -792,6 +870,21 @@ namespace TechFlow.Eventos.Infra.Migrations
                         .WithMany()
                         .HasForeignKey("EventoId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TechFlow.Eventos.Core.Ingressos.CompraIngresso", b =>
+                {
+                    b.HasOne("TechFlow.Eventos.Infra.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CompradorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TechFlow.Eventos.Core.Models.Evento", null)
+                        .WithMany()
+                        .HasForeignKey("EventoId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

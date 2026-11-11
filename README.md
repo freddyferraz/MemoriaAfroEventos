@@ -12,6 +12,22 @@ Piloto: Sacra Família do Tinguá e região (RJ).
 
 **QR codes** (`/qr.html`, para moderadores): QR 1 aponta para a página principal e QR 2 para o cadastro de evento.
 
+### Modo demonstração
+
+Com `Seed:EventosDemo=true` (variável `Seed__EventosDemo`), a plataforma se mantém populada para apresentações:
+
+- **Eventos com data relativa e imagem:** cada evento guarda "quantos dias à frente de hoje" (hoje, amanhã, em 5 dias... até 20 dias) e a data é recalculada a partir do dia atual (Brasília) ao iniciar e a cada 30 minutos. A agenda nunca esvazia, e há eventos de hoje (permitem testar avaliações). Cada evento ganha uma ilustração temática (tambor, café, casarão, feira...) gerada pelo próprio sistema. A situação (aprovado, pendente) de eventos já gravados não é alterada.
+- **Loja de exemplo:** 10 produtos de 4 vendedores fictícios, em todas as categorias, com fotos geradas pelo sistema, incluindo um produto esgotado e um aguardando aprovação.
+- **Compras de exemplo:** a conta de demonstração do comprador tem 4 pedidos (cartão de crédito parcelado, Pix, cartão de débito e boleto pendente), 4 compras de ingressos (grátis, Pix, débito e boleto pendente) e o plano Intermediário ativo. O vendedor de demonstração vê essas vendas. **Todos os dados de pagamento são fictícios.**
+- **Contas de demonstração:** `comprador.demo@conectacultura.exemplo` e `vendedor.demo@conectacultura.exemplo`. Defina `Seed__DemoSenha` (8+ caracteres, maiúscula, minúscula e número) para poder entrar nelas na apresentação; sem isso, a senha é aleatória e ninguém entra.
+- Os dados de demonstração só são criados quando faltam; não duplicam. Boletos pendentes de demonstração têm o vencimento renovado automaticamente. Em produção real, mantenha `Seed__EventosDemo=false`.
+
+### Fase 6: ingressos e formas de pagamento
+
+- **Ingressos** (página do evento): quem está logado compra de 1 a 10 ingressos do evento; evento gratuito gera o ingresso na hora. Os ingressos aparecem em `meus-ingressos.html` com um QR code por ingresso. Sem login, a página mostra um convite para entrar ou criar conta.
+- **Formas de pagamento** (`pagamento.html`, modo `Pagamentos__Modo=Simulado`): cartão de crédito (com parcelamento), cartão de débito, Pix (QR code e "copia e cola" fictícios) e boleto (linha digitável e código de barras fictícios). Valem para pedidos da loja, ingressos e planos. O número do cartão fica só no navegador: o servidor recebe apenas a forma de pagamento, as parcelas e os 4 últimos dígitos. Há botões com cartões de teste, inclusive um que simula recusa.
+- **Migration:** `dotnet ef migrations add AdicionaIngressosEFormasDePagamento --project TechFlow.Eventos.Infra --startup-project TechFlow.Eventos.Api`
+
 ### Fase 5: loja local, planos para organizadores e pagamentos
 
 Três módulos novos (`AddLojaModule`, `AddPlanosModule`, `AddPagamentosModule`):
